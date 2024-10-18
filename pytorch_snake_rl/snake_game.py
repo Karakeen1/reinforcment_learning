@@ -51,8 +51,8 @@ class SnakeGameAI:
         
         self.head = Point(self.w/2, self.h/2)
         self.snake = [self.head, 
-                      #Point(self.head.x-BLOCK_SIZE, self.head.y),   # uncomment for more starting body parts
-                      #Point(self.head.x-(2*BLOCK_SIZE), self.head.y)
+                      Point(self.head.x-BLOCK_SIZE, self.head.y),   # uncomment for more starting body parts
+                      Point(self.head.x-(2*BLOCK_SIZE), self.head.y)
         ]
         self.score = 0
         self.food = None
@@ -90,12 +90,13 @@ class SnakeGameAI:
         if self.is_collision() or self.frame_iteration > 150*bodyparts: # after some iteration of "doing nothing" the game stops
             if self.frame_iteration > 100*len(self.snake):
                 print("Game over: out of time")
+                reward = -9
             elif self.head.x >= self.w or self.head.x < 0 or self.head.y >= self.h or self.head.y < 0:
                 print("Game over: snake hit the boundary")
-                reward = -8
+                reward = -7
             else:
                 print("Game over: snake bit itself")
-                reward = -9
+                reward = -8
             game_over = True
             
             return reward, game_over, self.score
