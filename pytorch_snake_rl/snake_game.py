@@ -84,7 +84,7 @@ class SnakeGameAI:
         if self.is_collision() or self.frame_iteration > 100*len(self.snake): # after some iteration of "nothing" the game stops
             game_over = True
             reward = -10
-            return reqard, game_over, self.score
+            return reward, game_over, self.score
             
         # 4. place new food or just move
         if self.head == self.food:
@@ -98,7 +98,7 @@ class SnakeGameAI:
         self._update_ui()
         self.clock.tick(SPEED)
         # 6. return game over and score
-        return reqard, game_over, self.score
+        return reward, game_over, self.score
     
     def is_collision(self, pt=None):
         if pt is None:
@@ -137,7 +137,7 @@ class SnakeGameAI:
             new_dir = clock_wise[next_idx] # right turn right -> down -> left -> up
         else: # [0, 0, 1]
             next_idx = (idx - 1) % 4
-            new_dir = clock_wise[next_idx]¨# left turn  r -> u -> l -> d   
+            new_dir = clock_wise[next_idx] # left turn  r -> u -> l -> d   
             
         self.direction = new_dir     
             
@@ -148,7 +148,7 @@ class SnakeGameAI:
             x += BLOCK_SIZE
         elif self.direction == Direction.LEFT:
             x -= BLOCK_SIZE
-        elif self.irection == Direction.DOWN:
+        elif self.direction == Direction.DOWN:
             y += BLOCK_SIZE
         elif self.direction == Direction.UP:
             y -= BLOCK_SIZE
