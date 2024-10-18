@@ -6,7 +6,7 @@ from collections import namedtuple
 import numpy as np
 
 pygame.init()
-font = pygame.font.Font('arial.ttf', 25)
+font = pygame.font.Font('arial.ttf', 15)
 #font = pygame.font.SysFont('arial', 25)
 
 
@@ -30,7 +30,8 @@ BLUE2 = (0, 100, 255)
 BLACK = (0,0,0)
 
 BLOCK_SIZE = 20
-SPEED = 20
+SPEED = 20 # human control
+SPEED = 40 # for faster training
 
 class SnakeGameAI:
     
@@ -50,9 +51,9 @@ class SnakeGameAI:
         
         self.head = Point(self.w/2, self.h/2)
         self.snake = [self.head, 
-                      Point(self.head.x-BLOCK_SIZE, self.head.y),
-                      Point(self.head.x-(2*BLOCK_SIZE), self.head.y)]
-        
+                      #Point(self.head.x-BLOCK_SIZE, self.head.y),   # uncomment for more starting body parts
+                      #Point(self.head.x-(2*BLOCK_SIZE), self.head.y)
+        ]
         self.score = 0
         self.food = None
         self._place_food()
@@ -65,7 +66,7 @@ class SnakeGameAI:
         if self.food in self.snake:
             self._place_food()
         
-    def play_step(self, action):
+    def play_step(self, action, n_games, high_score):
         self.frame_iteration += 1
         # 1. collect user input
         for event in pygame.event.get():
@@ -81,9 +82,22 @@ class SnakeGameAI:
         # 3. check if game over
         reward = 0
         game_over = False
-        if self.is_collision() or self.frame_iteration > 100*len(self.snake): # after some iteration of "nothing" the game stops
+        if len(self.snake) < 3:
+            bodyparts = 3
+        else:
+            bodyparts = len(self.snake)
+            
+        if self.is_collision() or self.frame_iteration > 150*bodyparts: # after some iteration of "doing nothing" the game stops
+            if self.frame_iteration > 100*len(self.snake):
+                print("Game over: out of time")
+            elif self.head.x >= self.w or self.head.x < 0 or self.head.y >= self.h or self.head.y < 0:
+                print("Game over: snake hit the boundary")
+                reward = -8
+            else:
+                print("Game over: snake bit itself")
+                reward = -9
             game_over = True
-            reward = -10
+            
             return reward, game_over, self.score
             
         # 4. place new food or just move
@@ -95,7 +109,7 @@ class SnakeGameAI:
             self.snake.pop()
         
         # 5. update ui and clock
-        self._update_ui()
+        self._update_ui(n_games, high_score)
         self.clock.tick(SPEED)
         # 6. return game over and score
         return reward, game_over, self.score
@@ -112,7 +126,7 @@ class SnakeGameAI:
         
         return False
         
-    def _update_ui(self):
+    def _update_ui(self, n_games, high_score):
         self.display.fill(BLACK)
         
         for pt in self.snake:
@@ -122,7 +136,11 @@ class SnakeGameAI:
         pygame.draw.rect(self.display, RED, pygame.Rect(self.food.x, self.food.y, BLOCK_SIZE, BLOCK_SIZE))
         
         text = font.render("Score: " + str(self.score), True, WHITE)
-        self.display.blit(text, [0, 0])
+        self.display.blit(text, [3, 3])
+        text_high_score = font.render("High Score: " + str(high_score), True, WHITE)
+        self.display.blit(text_high_score, [3, 23])
+        text_n_game = font.render("Game: " + str(n_games), True, WHITE)
+        self.display.blit(text_n_game, [3, 43])
         pygame.display.flip()
         
     def _move(self, action):
