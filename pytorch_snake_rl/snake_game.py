@@ -30,8 +30,9 @@ BLUE2 = (0, 100, 255)
 BLACK = (0,0,0)
 
 BLOCK_SIZE = 20
-SPEED = 20 # human control
-SPEED = 40 # for faster training
+# SPEED = 5 # slow
+# SPEED = 20 # human control
+SPEED = 35 # for faster training
 
 class SnakeGameAI:
     
@@ -51,8 +52,10 @@ class SnakeGameAI:
         
         self.head = Point(self.w/2, self.h/2)
         self.snake = [self.head, 
-                      Point(self.head.x-BLOCK_SIZE, self.head.y),   # uncomment for more starting body parts
-                      Point(self.head.x-(2*BLOCK_SIZE), self.head.y)
+                      Point(self.head.x-BLOCK_SIZE, self.head.y),   # comment / uncomment for more/less starting body parts
+                      #Point(self.head.x-(2*BLOCK_SIZE), self.head.y),
+                      #Point(self.head.x-(2*BLOCK_SIZE), self.head.y),
+                      #Point(self.head.x-(2*BLOCK_SIZE), self.head.y)
         ]
         self.score = 0
         self.food = None
@@ -66,7 +69,7 @@ class SnakeGameAI:
         if self.food in self.snake:
             self._place_food()
         
-    def play_step(self, action, n_games, high_score):
+    def play_step(self, action, n_games, high_score, reward):
         self.frame_iteration += 1
         # 1. collect user input
         for event in pygame.event.get():
@@ -80,23 +83,23 @@ class SnakeGameAI:
         self.snake.insert(0, self.head)
         
         # 3. check if game over
-        reward = 0
+        reward += 0 # going further means more points
         game_over = False
-        if len(self.snake) < 3:
-            bodyparts = 3
+        if len(self.snake) < 4:
+            bodyparts = 4
         else:
             bodyparts = len(self.snake)
             
-        if self.is_collision() or self.frame_iteration > 150*bodyparts: # after some iteration of "doing nothing" the game stops
+        if self.is_collision() or self.frame_iteration > 100*bodyparts: # after some iteration of "doing nothing" the game stops
             if self.frame_iteration > 100*len(self.snake):
                 print("Game over: out of time")
-                reward = -9
+                reward += 0
             elif self.head.x >= self.w or self.head.x < 0 or self.head.y >= self.h or self.head.y < 0:
                 print("Game over: snake hit the boundary")
-                reward = -7
+                reward += 0
             else:
                 print("Game over: snake bit itself")
-                reward = -8
+                reward += 0
             game_over = True
             
             return reward, game_over, self.score
@@ -104,7 +107,7 @@ class SnakeGameAI:
         # 4. place new food or just move
         if self.head == self.food:
             self.score += 1
-            reward = 10
+            reward += 5
             self._place_food()
         else:
             self.snake.pop()
