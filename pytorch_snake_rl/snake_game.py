@@ -32,11 +32,11 @@ BLACK = (0,0,0)
 BLOCK_SIZE = 20
 # SPEED = 5 # slow
 # SPEED = 20 # human control
-SPEED = 35 # for faster training
+SPEED = 1000 # for faster training
 
 class SnakeGameAI:
     
-    def __init__(self, w=640, h=480):
+    def __init__(self, w=640/2, h=480/2):
         self.w = w
         self.h = h
         # init display
@@ -83,7 +83,7 @@ class SnakeGameAI:
         self.snake.insert(0, self.head)
         
         # 3. check if game over
-        reward += 0 # going further means more points
+        reward = 0.1 # going further means more points
         game_over = False
         if len(self.snake) < 4:
             bodyparts = 4
@@ -93,13 +93,13 @@ class SnakeGameAI:
         if self.is_collision() or self.frame_iteration > 100*bodyparts: # after some iteration of "doing nothing" the game stops
             if self.frame_iteration > 100*len(self.snake):
                 print("Game over: out of time")
-                reward += 0
+                reward = -100
             elif self.head.x >= self.w or self.head.x < 0 or self.head.y >= self.h or self.head.y < 0:
                 print("Game over: snake hit the boundary")
-                reward += 0
+                reward = -10
             else:
                 print("Game over: snake bit itself")
-                reward += 0
+                reward = -10
             game_over = True
             
             return reward, game_over, self.score
@@ -107,7 +107,7 @@ class SnakeGameAI:
         # 4. place new food or just move
         if self.head == self.food:
             self.score += 1
-            reward += 5
+            reward = 1000
             self._place_food()
         else:
             self.snake.pop()

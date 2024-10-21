@@ -9,7 +9,7 @@ import time
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 2048
-LEARNING_RATE = 0.005
+LEARNING_RATE = 0.01
 
 
 class Agent:
