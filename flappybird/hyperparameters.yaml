@@ -23,7 +23,7 @@ flappybird1:
   network_sync_rate: 10
   learning_rate_a: 0.0001
   discount_factor_g: 0.99
-  stop_on_reward: 1000
+  stop_on_reward: 5000
   fc1_nodes: 1024
   env_make_params:
     use_lidar: False

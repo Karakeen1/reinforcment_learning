@@ -1,3 +1,9 @@
+# Tutorial: https://www.youtube.com/watch?v=arR7KzlYs4w&list=PL58zEckBH8fCMIVzQCRSZVPUp3ZAVagWi
+# https://github.com/markub3327/flappy-bird-gymnasium/blob/main/README.md
+# https://github.com/johnnycode8/dqn_pytorch/blob/main/agent.py
+
+
+import gymnasium as gym
 import gymnasium as gym
 import numpy as np
 
@@ -5,7 +11,16 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 import random
+
+import matplotlib
+import matplotlib.pyplot as plt
+
+import random
 import torch
+from torch import nn
+import yaml
+
+from experience_replay import ReplayMemory
 from torch import nn
 import yaml # pip install pyyaml
 
@@ -23,20 +38,23 @@ import os
 DATE_FORMAT = "%m-%d %H:%M:%S"
 
 # Directory for saving run info
-RUNS_DIR = "runs"
+run_folder = datetime.now().strftime('%y%m%d_%H%M')
+RUNS_DIR = f"C:\\Users\\mmose\\OneDrive\\Programmieren\\reinforcment_learning\\flappybird\\runs\\{run_folder}"
 os.makedirs(RUNS_DIR, exist_ok=True)
 
 # 'Agg': used to generate plots as images and save them to a file instead of rendering to screen
 matplotlib.use('Agg')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-device = 'cpu' # force cpu, sometimes GPU not always faster than CPU due to overhead of moving data to GPU
+device = 'cpu' # force cpu, GPU slower than CPU (at least fc1_nodes: 1024) due to overhead of moving data to GPU
+print(f"using {device}")
+
 
 # Deep Q-Learning Agent
 class Agent():
 
     def __init__(self, hyperparameter_set):
-        with open('hyperparameters.yml', 'r') as file:
+        with open("C:\\Users\\mmose\\OneDrive\\Programmieren\\reinforcment_learning\\flappybird\\hyperparameters.yaml", 'r') as file:
             all_hyperparameter_sets = yaml.safe_load(file)
             hyperparameters = all_hyperparameter_sets[hyperparameter_set]
             # print(hyperparameters)
@@ -64,7 +82,7 @@ class Agent():
 
         # Path to Run info
         self.LOG_FILE   = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.log')
-        self.MODEL_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.pt')
+        self.MODEL_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.pt') # save the model
         self.GRAPH_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.png')
 
     def run(self, is_training=True, render=False):
@@ -91,7 +109,7 @@ class Agent():
         rewards_per_episode = []
 
         # Create policy and target network. Number of nodes in the hidden layer can be adjusted.
-        policy_dqn = DQN(num_states, num_actions, self.fc1_nodes, self.enable_double_dqn).to(device)
+        policy_dqn = DQN(num_states, num_actions, self.fc1_nodes).to(device)
 
         if is_training:
             # Initialize epsilon
@@ -101,7 +119,7 @@ class Agent():
             memory = ReplayMemory(self.replay_memory_size)
 
             # Create the target network and make it identical to the policy network
-            target_dqn = DQN(num_states, num_actions, self.fc1_nodes, self.enable_double_dqn).to(device)
+            target_dqn = DQN(num_states, num_actions, self.fc1_nodes).to(device)
             target_dqn.load_state_dict(policy_dqn.state_dict())
 
             # Policy network optimizer. "Adam" optimizer can be swapped to something else.
@@ -124,7 +142,9 @@ class Agent():
 
         # Train INDEFINITELY, manually stop the run when you are satisfied (or unsatisfied) with the results
         for episode in itertools.count():
-
+            if episode % 10000 == 0:
+                print(f"Episode {episode} started")
+                
             state, _ = env.reset()  # Initialize environment. Reset returns (state,info).
             state = torch.tensor(state, dtype=torch.float, device=device) # Convert state to tensor directly on device
 
@@ -170,6 +190,7 @@ class Agent():
 
             # Keep track of the rewards collected per episode.
             rewards_per_episode.append(episode_reward)
+
 
             # Save model when new best reward is obtained.
             if is_training:
@@ -278,6 +299,7 @@ class Agent():
         self.optimizer.zero_grad()  # Clear gradients
         loss.backward()             # Compute gradients
         self.optimizer.step()       # Update network parameters i.e. weights and biases
+
 
 if __name__ == '__main__':
     # Parse command line inputs
