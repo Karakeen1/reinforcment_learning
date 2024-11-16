@@ -1,0 +1,44 @@
+cartpole1:
+  env_id: CartPole-v1
+  replay_memory_size: 1000000
+  mini_batch_size: 32
+  epsilon_init: 1
+  epsilon_decay: 0.9995
+  epsilon_min: 0.05
+  network_sync_rate: 10
+  learning_rate_a: 0.001
+  discount_factor_g: 0.99
+  stop_on_reward: 300
+  fc1_nodes: 10
+  enable_double_dqn: True
+
+flappybird1:
+  env_id: FlappyBird-v0
+  replay_memory_size: 1000000
+  mini_batch_size: 64
+  epsilon_init: 1
+  epsilon_decay: 0.99_99_5
+  epsilon_min: 0.05
+  network_sync_rate: 10
+  learning_rate_a: 0.00008
+  discount_factor_g: 0.99
+  stop_on_reward: 100
+  fc1_nodes: 1024
+  env_make_params:
+    use_lidar: False
+  enable_double_dqn: True
+  
+
+flappybird_RGB:
+  env_id: FlappyBird-v0
+  replay_memory_size: 1000000
+  mini_batch_size: 64
+  epsilon_init: 1
+  epsilon_decay: 0.99_99_5
+  epsilon_min: 0.05
+  network_sync_rate: 10
+  learning_rate_a: 0.00008
+  discount_factor_g: 0.99
+  stop_on_reward: 100
+  fc1_nodes: 1024
+  enable_double_dqn: True
