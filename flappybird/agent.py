@@ -1,16 +1,10 @@
 # Tutorial: https://www.youtube.com/watch?v=arR7KzlYs4w&list=PL58zEckBH8fCMIVzQCRSZVPUp3ZAVagWi
 # https://github.com/markub3327/flappy-bird-gymnasium/blob/main/README.md
 # https://github.com/johnnycode8/dqn_pytorch/blob/main/agent.py
+# https://www.toptal.com/deep-learning/pytorch-reinforcement-learning-tutorial <- convolutional network
 
-
-import gymnasium as gym
 import gymnasium as gym
 import numpy as np
-
-import matplotlib
-import matplotlib.pyplot as plt
-
-import random
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -25,7 +19,8 @@ from torch import nn
 import yaml # pip install pyyaml
 
 from experience_replay import ReplayMemory
-from dqn import DQN
+from models import DQN
+from models import NeuralNetwork
 
 from datetime import datetime, timedelta
 import argparse
@@ -38,7 +33,7 @@ import os
 DATE_FORMAT = "%m-%d %H:%M:%S"
 
 # Directory for saving run info
-run_folder = datetime.now().strftime('%y%m%d_%H%M')
+run_folder = "" # datetime.now().strftime('%y%m%d_%H%M')
 RUNS_DIR = f"C:\\Users\\mmose\\OneDrive\\Programmieren\\reinforcment_learning\\flappybird\\runs\\{run_folder}"
 os.makedirs(RUNS_DIR, exist_ok=True)
 
