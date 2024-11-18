@@ -20,7 +20,7 @@ import yaml # pip install pyyaml
 
 from experience_replay import ReplayMemory
 from models import DQN
-from models import NeuralNetwork
+from models import CNN
 
 from datetime import datetime, timedelta
 import argparse
