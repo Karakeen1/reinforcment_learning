@@ -23,8 +23,8 @@ class ReplayMemory:
     def __init__(self, maxlen):
         self.memory = deque([], maxlen=maxlen)
 
-    def push(self, state, action, reward, terminated):
-        self.memory.append((state, action, reward, terminated))
+    def push(self, state, action, new_state, reward, terminated):
+        self.memory.append((state, action, new_state, reward, terminated))
 
     def sample(self, batch_size):
         return random.sample(self.memory, batch_size)

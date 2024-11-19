@@ -132,28 +132,24 @@ class Agent():
             terminated = False
             episode_reward = 0.0
             
+            env.render()
+            clock.tick(60)
+            
+            screenshot = pygame.surfarray.array3d(screen)
+            screenshot = screenshot.transpose([1, 0, 2])  # Transpose to get the correct orientation
+            screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
+            
+            #cv2.imshow('Screenshot', screenshot)
+            frame_array = preprocess_frame(screenshot) # shape tupple (84, 84)          
+            state = torch.tensor(frame_array, dtype=torch.float, device=device)
+            state = preprocess_state(state)  # Now state has shape [1, 1, 84, 84]
+            # print(f"state from image: {state}, shape: {state.shape}")
 
             while(not terminated and episode_reward < self.stop_on_reward):
-                env.render()
-                clock.tick(60)
-                
-                screenshot = pygame.surfarray.array3d(screen)
-                screenshot = screenshot.transpose([1, 0, 2])  # Transpose to get the correct orientation
-                screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
-                
-                #cv2.imshow('Screenshot', screenshot)
-                frame_array = preprocess_frame(screenshot) # shape tupple (84, 84)
-                # print(frame_array.shape)
-                if(not saved_image and episode_reward > 12):
-                   cv2.imwrite("flappybird.png", screenshot)
-                   saved_image = True
-                
-                state = torch.tensor(frame_array, dtype=torch.float, device=device)
-                state = preprocess_state(state)  # Now state has shape [1, 1, 84, 84]
-                # print(f"state from image: {state}, shape: {state.shape}")
+            
                 
                 # start RL training after some initial manual rounds
-                if episode < 100:
+                if episode < 15:
                     # Set default action to 0 (do nothing)
                     action = 0
 
@@ -182,18 +178,40 @@ class Agent():
                             action = policy_cnn(state).squeeze().argmax()
 
                 # use environment for terminated, else is from image
-                new_state, reward, terminated, truncated, info = env.step(action.item())
-                reward = 0.1
+                env_new_state, reward, terminated, truncated, info = env.step(action.item())
+                
+                
+                screenshot = pygame.surfarray.array3d(screen)
+                screenshot = screenshot.transpose([1, 0, 2])  # Transpose to get the correct orientation
+                screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
+                
+                #cv2.imshow('Screenshot', screenshot)
+                frame_array = preprocess_frame(screenshot) # shape tupple (84, 84)
+                # print(frame_array.shape)
+                if(not saved_image and episode_reward > 12):
+                    cv2.imwrite("flappybird.png", screenshot)
+                    saved_image = True
+                
+                new_state = torch.tensor(frame_array, dtype=torch.float, device=device)
+                new_state = preprocess_state(state)  # Now state has shape [1, 1, 84, 84]
+                # print(f"state from image: {state}, shape: {state.shape}")
+                
+                
+                if terminated:
+                    reward = -1
+                else:   
+                    reward = 0.1
+                
                 episode_reward += reward
                 # new_state = torch.tensor(new_state, dtype=torch.float, device=device)
                 reward = torch.tensor(reward, dtype=torch.float, device=device)
 
                 if is_training:
                     # memory.append((state, action, new_state, reward, terminated))
-                    memory.push(state.squeeze(0), action, reward, terminated)  # Store without batch dimension
+                    memory.push(state.squeeze(0), action, new_state.squeeze(0), reward, terminated)  # Store without batch dimension
                     step_count += 1
 
-                # state = new_state
+                state = new_state
 
             rewards_per_episode.append(episode_reward)
 
@@ -255,8 +273,7 @@ class Agent():
     def optimize(self, mini_batch, policy_cnn, target_cnn):
 
         # Transpose the list of experiences and separate each element
-        #states, actions, new_states, rewards, terminations = zip(*mini_batch)
-        states, actions, rewards, terminations = zip(*mini_batch)
+        states, actions, new_states, rewards, terminations = zip(*mini_batch)
 
         # Stack tensors to create batch tensors
         # tensor([[1,2,3]])
@@ -266,14 +283,14 @@ class Agent():
         states = states.squeeze(1)  # This will change shape from [batch_size, 1, 1, 84, 84] to [batch_size, 1, 84, 84]
 
         actions = torch.stack(actions)
-
+        new_states = torch.stack(new_states)
         rewards = torch.stack(rewards)
         terminations = torch.tensor(terminations).float().to(device)
 
         with torch.no_grad():
             # Calculate target Q values (expected returns)
             # target_q = rewards + (1-terminations) * self.discount_factor_g * target_dqn(new_states).max(dim=1)[0]
-            target_q = rewards + (1-terminations) * self.discount_factor_g * target_cnn(states).max(dim=1)[0]
+            target_q = rewards + (1-terminations) * self.discount_factor_g * target_cnn(new_states).max(dim=1)[0]
             '''
                 target_dqn(new_states)  ==> tensor([[1,2,3],[4,5,6]])
                     .max(dim=1)         ==> torch.return_types.max(values=tensor([3,6]), indices=tensor([3, 0, 0, 1]))
