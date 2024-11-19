@@ -54,13 +54,18 @@ class CNN(nn.Module):
 
         self.number_of_actions = num_actions
         self.gamma = 0.99
-        self.final_epsilon = 0.0001
+        self.final_epsilon = 0.00001
         self.initial_epsilon = 0.1
         self.number_of_iterations = 2000000
-        self.replay_memory_size = 10000
+        self.replay_memory_size = 100000
         self.minibatch_size = 32
 
-        self.conv1 = nn.Conv2d(4, 32, 8, 4)
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=8, stride=4)
+        # in_channels represents the number of input channels (or depth) of the input tensor to this convolutional layer.
+        # Grayscale images usually have 1 channel
+        # RGB color images typically have 3 channels (Red, Green, Blue)
+        # Some image formats or feature maps might have 4 channels (e.g., RGBA with an alpha channel for transparency)
+
         self.relu1 = nn.ReLU(inplace=True)
         self.conv2 = nn.Conv2d(32, 64, 4, 2)
         self.relu2 = nn.ReLU(inplace=True)

@@ -32,7 +32,8 @@ import pyautogui
 
 
 DATE_FORMAT = "%m-%d %H:%M:%S"
-run_folder = "" # datetime.now().strftime('%y%m%d_%H%M') # uncomment to save in a run sub folder with date
+run_folder = "" #
+run_folder = datetime.now().strftime('%y%m%d_%H%M') # uncomment to save in a run sub folder with date
 RUNS_DIR = f"C:\\Users\\mmose\\OneDrive\\Programmieren\\reinforcment_learning\\flappybird\\runs\\{run_folder}"
 os.makedirs(RUNS_DIR, exist_ok=True)
 
@@ -104,20 +105,30 @@ class Agent():
         else:
             policy_cnn.load_state_dict(torch.load(self.MODEL_FILE))
             policy_cnn.eval()
-            pass
 
+        # initialize pygame 
         pygame.init()
         pygame.display.set_caption("flappybird")
         screen = pygame.display.set_mode((288, 512))  # Adjust size to match your Flappy Bird window
         clock = pygame.time.Clock()
-        made_screenshot = False
-
+        saved_image = False
+        
 
         for episode in itertools.count():
-            if episode % 10000 == 0:
-                print(f"Episode {episode} started")
+            print_n_episodes = 100
+            if episode % print_n_episodes == 0:
+                if episode == 0:  
+                    episode_start_time = datetime.now()
+                else:
+                    episode_end_time = datetime.now()
+                    n_episodes_timer = episode_end_time - episode_start_time
+                    print(f"Episode {episode} started, latest episode reward {episode_reward}, time for {print_n_episodes} episodes: {int(n_episodes_timer.total_seconds())} seconds")
+                    episode_start_time = datetime.now()
+                
             state, _ = env.reset()
-            state = torch.tensor(state, dtype=torch.float, device=device)
+            
+            # state = torch.tensor(state, dtype=torch.float, device=device)
+            # print(f"state from env: {state}, shape: {state.shape}")
             terminated = False
             episode_reward = 0.0
             
@@ -129,39 +140,62 @@ class Agent():
                 screenshot = pygame.surfarray.array3d(screen)
                 screenshot = screenshot.transpose([1, 0, 2])  # Transpose to get the correct orientation
                 screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
-                if(not made_screenshot and episode_reward > 15):
-                   cv2.imwrite("screenshot.png", screenshot)
-                   made_screenshot = True
+                
                 #cv2.imshow('Screenshot', screenshot)
                 frame_array = preprocess_frame(screenshot) # shape tupple (84, 84)
                 # print(frame_array.shape)
+                if(not saved_image and episode_reward > 12):
+                   cv2.imwrite("flappybird.png", screenshot)
+                   saved_image = True
                 
+                state = torch.tensor(frame_array, dtype=torch.float, device=device)
+                state = preprocess_state(state)  # Now state has shape [1, 1, 84, 84]
+                # print(f"state from image: {state}, shape: {state.shape}")
+                
+                # start RL training after some initial manual rounds
+                if episode < 100:
+                    # Set default action to 0 (do nothing)
+                    action = 0
 
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        env.close()
-                        return
-                    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                        env.close()
-                        return
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            pygame.quit()
+                            return False
+                        if event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_SPACE:
+                                action = 1  # Flap
 
-                keys = pygame.key.get_pressed()
-                action = 1 if keys[pygame.K_SPACE] else 0
-                action = torch.tensor(action, dtype=torch.int64, device=device)
+                    # Convert action to tensor
+                    action = torch.tensor(action, dtype=torch.int64, device=device)
+                
+                else:
+                    # Select action based on epsilon-greedy
+                    if is_training and random.random() < epsilon:
+                        # select random action
+                        action = env.action_space.sample()
+                        action = torch.tensor(action, dtype=torch.int64, device=device)
+                    else:
+                        # select best action
+                        with torch.no_grad():
+                            # Add batch and channel dimensions
+                            # with unsqueeze(0).unsqueeze(0) New shape: (1, 1, 84, 84)
+                            action = policy_cnn(state).squeeze().argmax()
 
+                # use environment for terminated, else is from image
                 new_state, reward, terminated, truncated, info = env.step(action.item())
+                reward = 0.1
                 episode_reward += reward
-                new_state = torch.tensor(new_state, dtype=torch.float, device=device)
+                # new_state = torch.tensor(new_state, dtype=torch.float, device=device)
                 reward = torch.tensor(reward, dtype=torch.float, device=device)
 
                 if is_training:
-                    memory.append((state, action, new_state, reward, terminated))
+                    # memory.append((state, action, new_state, reward, terminated))
+                    memory.push(state.squeeze(0), action, reward, terminated)  # Store without batch dimension
                     step_count += 1
 
-                state = new_state
+                # state = new_state
 
             rewards_per_episode.append(episode_reward)
-            print(f"episode Reward {episode_reward}")
 
             if is_training:
                 if episode_reward > best_reward:
@@ -218,39 +252,36 @@ class Agent():
 
 
     # Optimize policy network
-    def optimize(self, mini_batch, policy_dqn, target_dqn):
+    def optimize(self, mini_batch, policy_cnn, target_cnn):
 
         # Transpose the list of experiences and separate each element
-        states, actions, new_states, rewards, terminations = zip(*mini_batch)
+        #states, actions, new_states, rewards, terminations = zip(*mini_batch)
+        states, actions, rewards, terminations = zip(*mini_batch)
 
         # Stack tensors to create batch tensors
         # tensor([[1,2,3]])
-        states = torch.stack(states)
+        # Ensure all states are in the correct format
+        states = torch.stack([preprocess_state(state) for state in states])
+        # Remove the extra dimension
+        states = states.squeeze(1)  # This will change shape from [batch_size, 1, 1, 84, 84] to [batch_size, 1, 84, 84]
 
         actions = torch.stack(actions)
-
-        new_states = torch.stack(new_states)
 
         rewards = torch.stack(rewards)
         terminations = torch.tensor(terminations).float().to(device)
 
         with torch.no_grad():
-            if self.enable_double_dqn:
-                best_actions_from_policy = policy_dqn(new_states).argmax(dim=1)
-
-                target_q = rewards + (1-terminations) * self.discount_factor_g * \
-                                target_dqn(new_states).gather(dim=1, index=best_actions_from_policy.unsqueeze(dim=1)).squeeze()
-            else:
-                # Calculate target Q values (expected returns)
-                target_q = rewards + (1-terminations) * self.discount_factor_g * target_dqn(new_states).max(dim=1)[0]
-                '''
-                    target_dqn(new_states)  ==> tensor([[1,2,3],[4,5,6]])
-                        .max(dim=1)         ==> torch.return_types.max(values=tensor([3,6]), indices=tensor([3, 0, 0, 1]))
-                            [0]             ==> tensor([3,6])
-                '''
+            # Calculate target Q values (expected returns)
+            # target_q = rewards + (1-terminations) * self.discount_factor_g * target_dqn(new_states).max(dim=1)[0]
+            target_q = rewards + (1-terminations) * self.discount_factor_g * target_cnn(states).max(dim=1)[0]
+            '''
+                target_dqn(new_states)  ==> tensor([[1,2,3],[4,5,6]])
+                    .max(dim=1)         ==> torch.return_types.max(values=tensor([3,6]), indices=tensor([3, 0, 0, 1]))
+                        [0]             ==> tensor([3,6])
+            '''
 
         # Calcuate Q values from current policy
-        current_q = policy_dqn(states).gather(dim=1, index=actions.unsqueeze(dim=1)).squeeze()
+        current_q = policy_cnn(states).gather(dim=1, index=actions.unsqueeze(dim=1)).squeeze()
         '''
             policy_dqn(states)  ==> tensor([[1,2,3],[4,5,6]])
                 actions.unsqueeze(dim=1)
@@ -303,6 +334,19 @@ def preprocess_frame(frame):
     
     return normalized
 
+
+def preprocess_state(state):
+    if state.dim() == 2:
+        # Add channel and batch dimensions
+        return state.unsqueeze(0).unsqueeze(0)
+    elif state.dim() == 3:
+        # Add batch dimension
+        return state.unsqueeze(0)
+    elif state.dim() == 4:
+        # Already in correct format
+        return state
+    else:
+        raise ValueError(f"Unexpected state shape: {state.shape}")
 
 
 if __name__ == '__main__':
