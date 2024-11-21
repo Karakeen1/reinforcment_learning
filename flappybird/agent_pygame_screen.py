@@ -111,7 +111,8 @@ class Agent():
         pygame.display.set_caption("flappybird")
         screen = pygame.display.set_mode((288, 512))  # Adjust size to match your Flappy Bird window
         clock = pygame.time.Clock()
-        saved_image = False
+        between_pipes_count = 0
+        between_pipes_cooldown = 0
         
 
         for episode in itertools.count():
@@ -147,9 +148,10 @@ class Agent():
 
             while(not terminated and episode_reward < self.stop_on_reward):
             
-                
+                ###############################################
                 # start RL training after some initial manual rounds
-                if episode < 15:
+                ###############################################
+                if episode < 0:
                     # Set default action to 0 (do nothing)
                     action = 0
 
@@ -177,34 +179,47 @@ class Agent():
                             # with unsqueeze(0).unsqueeze(0) New shape: (1, 1, 84, 84)
                             action = policy_cnn(state).squeeze().argmax()
 
-                # use environment for terminated, else is from image
-                env_new_state, reward, terminated, truncated, info = env.step(action.item())
+                # use environment only for termination, all other extracted from image
+                env_new_state, env_reward, terminated, truncated, info = env.step(action.item())
                 
                 
                 screenshot = pygame.surfarray.array3d(screen)
                 screenshot = screenshot.transpose([1, 0, 2])  # Transpose to get the correct orientation
                 screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
                 
-                #cv2.imshow('Screenshot', screenshot)
                 frame_array = preprocess_frame(screenshot) # shape tupple (84, 84)
-                # print(frame_array.shape)
-                if(not saved_image and episode_reward > 12):
-                    cv2.imwrite("flappybird.png", screenshot)
-                    saved_image = True
                 
                 new_state = torch.tensor(frame_array, dtype=torch.float, device=device)
                 new_state = preprocess_state(state)  # Now state has shape [1, 1, 84, 84]
-                # print(f"state from image: {state}, shape: {state.shape}")
                 
                 
+                # Analyse frame array for reward:
+                # at pixel x= 22 the bird is all black
+                white_pixel_count = np.sum(frame_array[:, 22])
+                # print(white_pixel_count)
+                # >= 76 pixel bird without pipe
+                # <= 35 pixel bird between pipes, goes on for ~13..14 frames
+                # == 84 pixel out of bounds
+                             
+                if white_pixel_count <= 35 :
+                    between_pipes_count += 1
+                else:
+                    between_pipes_count = 0 # sets to 0 when bird is in the open
+                
+
                 if terminated:
-                    reward = -1
+                    reward = -1 # dying
+                elif white_pixel_count == 84:
+                    reward = -0.5 # touch the top of the screen
+                elif between_pipes_count == 8:
+                    reward = 1 # reward for passing the pipe is around 2/3 of the pipe
                 else:   
                     reward = 0.1
                 
                 episode_reward += reward
                 # new_state = torch.tensor(new_state, dtype=torch.float, device=device)
                 reward = torch.tensor(reward, dtype=torch.float, device=device)
+                
 
                 if is_training:
                     # memory.append((state, action, new_state, reward, terminated))
@@ -341,13 +356,37 @@ class WindowCapture:
     
 def preprocess_frame(frame):
     # Convert to grayscale
-    gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-    
+    # gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
     # Resize
-    resized = cv2.resize(gray, (84, 84), interpolation=cv2.INTER_AREA)
+    # resized = cv2.resize(black_white, (84, 84), interpolation=cv2.INTER_AREA)
+    
+    # Separate color channels
+    blue = frame[:, :, 0] # most prommising chanel since pipes and bird very dark
+    green = frame[:, :, 1]
+    red = frame[:, :, 2]
+    
+    cv2.imwrite("flappybird_blue.png", blue)
+    cv2.imwrite("flappybird_green.png", green)
+    cv2.imwrite("flappybird_red.png", red)
+    cv2.imwrite("flappybird_original.png", frame)
+    
+    # Crop top and bottom  
+    height = blue.shape[0]
+    cropped = blue[90:height-150, :]
+    cv2.imwrite("flappybird_cropped.png", cropped)
+    # Resize
+    resized = cv2.resize(cropped, (84, 84), interpolation=cv2.INTER_AREA)
+    cv2.imwrite("flappybird_resized.png", resized)
+    
+    
+    # Apply threshold
+    threshold = 170 # 80 is fine
+    black_white = np.where(resized < threshold, 0, 255)
+    cv2.imwrite("flappybird_blacknwhite.png", black_white)
+    
     
     # Normalize
-    normalized = resized / 255.0
+    normalized = black_white / 255.0
     
     return normalized
 
