@@ -60,6 +60,7 @@ class Agent():
         self.mini_batch_size    = hyperparameters['mini_batch_size']        # size of the training data set sampled from the replay memory
         self.epsilon_init       = hyperparameters['epsilon_init']           # 1 = 100% random actions
         self.epsilon_decay      = hyperparameters['epsilon_decay']          # epsilon decay rate
+        self.epsilon_offset     = hyperparameters['epsilon_offset']         # n episodes with stable espilon = epsilon_init
         self.epsilon_min        = hyperparameters['epsilon_min']            # minimum epsilon value
         self.stop_on_reward     = hyperparameters['stop_on_reward']         # stop training after reaching this number of rewards
         self.fc1_nodes          = hyperparameters['fc1_nodes']
@@ -83,9 +84,10 @@ class Agent():
                 file.write(log_message + '\n')
 
         env = gym.make(self.env_id, render_mode='human', **self.env_make_params)
+        env.metadata['render_fps'] = 1000
         num_actions = env.action_space.n
         # num_states = env.observation_space.shape[0] # 12
-        num_states = (84,84)
+        # num_states = (84,84)
 
         rewards_per_episode = []
         #policy_dqn = DQN(num_states, num_actions, self.fc1_nodes).to(device)
@@ -111,20 +113,29 @@ class Agent():
         pygame.display.set_caption("flappybird")
         screen = pygame.display.set_mode((288, 512))  # Adjust size to match your Flappy Bird window
         clock = pygame.time.Clock()
-        between_pipes_count = 0
-        between_pipes_cooldown = 0
+        humaninput_episodes = 0  # human control to give a head start
+        env_step_count = 0
         
+        raise_epsilon = False
+        
+        
+        if humaninput_episodes > 0:
+                print(f"starting with human input for {humaninput_episodes} episodes")
 
         for episode in itertools.count():
-            print_n_episodes = 100
+            print_n_episodes = 1000
             if episode % print_n_episodes == 0:
                 if episode == 0:  
                     episode_start_time = datetime.now()
                 else:
                     episode_end_time = datetime.now()
                     n_episodes_timer = episode_end_time - episode_start_time
-                    print(f"Episode {episode} started, latest episode reward {episode_reward}, time for {print_n_episodes} episodes: {int(n_episodes_timer.total_seconds())} seconds")
+                    n_episodes_timer = int(n_episodes_timer.total_seconds())
+                    env_steps_rate = env_step_count / n_episodes_timer
+                    print(f"Episode {episode} started, time for {print_n_episodes} episodes: {n_episodes_timer} seconds, Steps: {env_step_count}, Steprate: {env_steps_rate} steps/second")
                     episode_start_time = datetime.now()
+                    env_step_count = 0 
+                    
                 
             state, _ = env.reset()
             
@@ -134,7 +145,6 @@ class Agent():
             episode_reward = 0.0
             
             env.render()
-            clock.tick(60)
             
             screenshot = pygame.surfarray.array3d(screen)
             screenshot = screenshot.transpose([1, 0, 2])  # Transpose to get the correct orientation
@@ -145,13 +155,17 @@ class Agent():
             state = torch.tensor(frame_array, dtype=torch.float, device=device)
             state = preprocess_state(state)  # Now state has shape [1, 1, 84, 84]
             # print(f"state from image: {state}, shape: {state.shape}")
+            
+            if episode % 10 == 0 and humaninput_episodes > episode and episode != 0:
+                print(f"{episode} episodes of {humaninput_episodes} humaninput episodes passed")
 
             while(not terminated and episode_reward < self.stop_on_reward):
             
                 ###############################################
                 # start RL training after some initial manual rounds
                 ###############################################
-                if episode < 0:
+                if episode < humaninput_episodes:
+                    env.metadata['render_fps'] = 30
                     # Set default action to 0 (do nothing)
                     action = 0
 
@@ -162,13 +176,36 @@ class Agent():
                         if event.type == pygame.KEYDOWN:
                             if event.key == pygame.K_SPACE:
                                 action = 1  # Flap
-
+                                
                     # Convert action to tensor
                     action = torch.tensor(action, dtype=torch.int64, device=device)
                 
+                    if episode +1 == humaninput_episodes: # change speed in last human interaction episode
+                        print(f"RL takes over")
+                        env.metadata['render_fps'] = 1000
+                        humaninput_episodes = 0                   
+                
                 else:
                     # Select action based on epsilon-greedy
-                    if is_training and random.random() < epsilon:
+                    if (is_training and epsilon < 0.05 and episode % 50000 <= 5000 and episode % 50000 > 0) or raise_epsilon:
+                        if not raise_epsilon:
+                            epsilon_checkin = epsilon
+                        raise_epsilon = True
+                        epsilon = 0.125
+                        #print(f"episode % 100 = {episode%100}")
+                        if random.random() < epsilon:
+                            action = env.action_space.sample()
+                            action = torch.tensor(action, dtype=torch.int64, device=device)
+                        else:
+                        # select best action
+                            with torch.no_grad():
+                                action = policy_cnn(state).squeeze().argmax()
+                        if episode % 50000 == 5000:
+                            epsilon = epsilon_checkin
+                            raise_epsilon = False
+                            #print(f"reset epsilon to {epsilon} and set raise_epsilon to {raise_epsilon}")
+                                
+                    elif is_training and random.random() < epsilon:
                         # select random action
                         action = env.action_space.sample()
                         action = torch.tensor(action, dtype=torch.int64, device=device)
@@ -181,7 +218,7 @@ class Agent():
 
                 # use environment only for termination, all other extracted from image
                 env_new_state, env_reward, terminated, truncated, info = env.step(action.item())
-                
+                env_step_count += 1
                 
                 screenshot = pygame.surfarray.array3d(screen)
                 screenshot = screenshot.transpose([1, 0, 2])  # Transpose to get the correct orientation
@@ -194,27 +231,24 @@ class Agent():
                 
                 
                 # Analyse frame array for reward:
-                # at pixel x= 22 the bird is all black
-                white_pixel_count = np.sum(frame_array[:, 22])
-                # print(white_pixel_count)
-                # >= 76 pixel bird without pipe
-                # <= 35 pixel bird between pipes, goes on for ~13..14 frames
-                # == 84 pixel out of bounds
-                             
-                if white_pixel_count <= 35 :
-                    between_pipes_count += 1
-                else:
-                    between_pipes_count = 0 # sets to 0 when bird is in the open
-                
+                # at pixel x= 22 the bird is all black for 84x84
+                # bird 42x42 at pixel 11, 3 after cropping left
+                white_pixel_count = np.sum(frame_array[:, 3])
+                #print(white_pixel_count)
+                #time.sleep(0.1)
+                # >= 76 pixel bird without pipe (<= 4 for 42x42 bw inverted)
+                # <= 35 pixel bird between pipes, goes on for ~13..14 frames (>=29 42x42 bw inverted)
+                # == 0 pixel out of bounds
+
                 if terminated:
-                    reward = -1 # dying
-                elif white_pixel_count == 84:
+                    reward = -2 # dying
+                elif white_pixel_count == 0:
                     reward = -0.5 # touch the top of the screen
-                elif between_pipes_count == 12:
-                    reward = 1 # reward for passing the pipe (12 ist allmost through)
+                elif white_pixel_count >= 25 :
+                    reward = 0.3 # reward for passing the pipe. total ~4
                 else:   
                     reward = 0.1
-                
+                #print(reward)
                 episode_reward += reward
                 # new_state = torch.tensor(new_state, dtype=torch.float, device=device)
                 reward = torch.tensor(reward, dtype=torch.float, device=device)
@@ -247,7 +281,8 @@ class Agent():
                     mini_batch = memory.sample(self.mini_batch_size)
                     self.optimize(mini_batch, policy_cnn, target_cnn)
 
-                epsilon = max(epsilon * self.epsilon_decay, self.epsilon_min)
+                if episode > self.epsilon_offset and not raise_epsilon: # epsilon decay starts after n episodes offset
+                    epsilon = max(epsilon * self.epsilon_decay, self.epsilon_min)
                 epsilon_history.append(epsilon)
 
                 if step_count > self.network_sync_rate:
@@ -257,30 +292,45 @@ class Agent():
         env.close()
         pygame.quit()
         
+        
     def save_graph(self, rewards_per_episode, epsilon_history):
-        # Save plots
-        fig = plt.figure(1)
+    # Save plots
+        fig, ax1 = plt.subplots()  # Create a single plot
 
-        # Plot average rewards (Y-axis) vs episodes (X-axis)
+        # Calculate mean rewards
         mean_rewards = np.zeros(len(rewards_per_episode))
         for x in range(len(mean_rewards)):
             mean_rewards[x] = np.mean(rewards_per_episode[max(0, x-99):(x+1)])
-        plt.subplot(121) # plot on a 1 row x 2 col grid, at cell 1
-        # plt.xlabel('Episodes')
-        plt.ylabel('Mean Rewards')
-        plt.plot(mean_rewards)
 
-        # Plot epsilon decay (Y-axis) vs episodes (X-axis)
-        plt.subplot(122) # plot on a 1 row x 2 col grid, at cell 2
-        # plt.xlabel('Time Steps')
-        plt.ylabel('Epsilon Decay')
-        plt.plot(epsilon_history)
+        # Plot raw rewards per episode in green
+        ax1.plot(rewards_per_episode, color='g', alpha=0.3, label='Rewards per Episode')
 
-        plt.subplots_adjust(wspace=1.0, hspace=1.0)
+        # Plot mean rewards
+        ax1.set_xlabel('Episodes')
+        ax1.set_ylabel('Rewards', color='b')
+        ax1.plot(mean_rewards, color='b', label='Mean Rewards')
+        ax1.tick_params(axis='y', labelcolor='b')
 
-        # Save plots
+        # Create a second y-axis for epsilon decay
+        ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+        ax2.set_ylabel('Epsilon Decay', color='r')
+        ax2.plot(epsilon_history, color='r', label='Epsilon Decay')
+        ax2.tick_params(axis='y', labelcolor='r')
+
+        # Set title and adjust layout
+        plt.title('Rewards and Epsilon Decay')
+        fig.tight_layout()  # to ensure everything fits without overlap
+
+        # Add legend
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+
+        # Save plot
         fig.savefig(self.GRAPH_FILE)
         plt.close(fig)
+
+
 
 
     # Optimize policy network
@@ -369,23 +419,24 @@ def preprocess_frame(frame):
     #cv2.imwrite("flappybird_red.png", red)
     #cv2.imwrite("flappybird_original.png", frame)
     
-    # Crop top and bottom  
+    # Crop top, bottom and left (behind the bird unnecessary information)
     height = blue.shape[0]
-    cropped = blue[90:height-150, :]
+    cropped = blue[90:height-150, 60:]
     #cv2.imwrite("flappybird_cropped.png", cropped)
     # Resize
-    resized = cv2.resize(cropped, (84, 84), interpolation=cv2.INTER_AREA) # try 42x42 pixels
+    resized = cv2.resize(cropped, (42, 42), interpolation=cv2.INTER_AREA) # try 42x42 pixels
     #cv2.imwrite("flappybird_resized.png", resized)
     
     
     # Apply threshold
     threshold = 170 
-    black_white = np.where(resized < threshold, 0, 255) # TODO: change to inverted black and white 
+    #black_white = np.where(resized > threshold, 0, 255)
+    normalized = np.where(resized > threshold, 0, 1) #  allready normalized 0 for 
     #cv2.imwrite("flappybird_blacknwhite.png", black_white)
     
     # Normalize
-    normalized = black_white / 255.0
-    
+    #normalized = black_white / 255.0
+    #print(normalized)
     return normalized
 
 

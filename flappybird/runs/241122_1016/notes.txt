@@ -1,0 +1,19 @@
+input image reduziert auf 42x42
+black und white invertiert
+
+flappybird1:
+  env_id: FlappyBird-v0
+  replay_memory_size: 100000
+  mini_batch_size: 1024
+  epsilon_init: 0.1
+  epsilon_decay: 0.99_95
+  epsilon_min: 0.00001
+  network_sync_rate: 100
+  learning_rate_a: 0.0001
+  discount_factor_g: 0.99
+  stop_on_reward: 5000
+  fc1_nodes: 1024
+  env_make_params:
+    use_lidar: False
+  enable_double_dqn: True
+  enable_dueling_dqn: False

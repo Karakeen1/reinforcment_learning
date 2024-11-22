@@ -1,0 +1,19 @@
+no human interaction
+
+flappybird1:
+  env_id: FlappyBird-v0
+  replay_memory_size: 100000 # frames saved in memory: 1 episode without action (just fall) is about 30 frames
+  mini_batch_size: 1024
+  epsilon_init: 0.1
+  epsilon_decay: 0.99_99_5 # 0.999 after 3000 episodes 0.5% chance
+  epsilon_offset: 10000 # episodes with stable espilon_init
+  epsilon_min: 0.0
+  network_sync_rate: 100
+  learning_rate_a: 0.0001
+  discount_factor_g: 0.99
+  stop_on_reward: 15000
+  fc1_nodes: 1024
+  env_make_params:
+    use_lidar: False
+  enable_double_dqn: True
+  enable_dueling_dqn: False
