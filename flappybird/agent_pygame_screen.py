@@ -206,13 +206,12 @@ class Agent():
                 else:
                     between_pipes_count = 0 # sets to 0 when bird is in the open
                 
-
                 if terminated:
                     reward = -1 # dying
                 elif white_pixel_count == 84:
                     reward = -0.5 # touch the top of the screen
-                elif between_pipes_count == 8:
-                    reward = 1 # reward for passing the pipe is around 2/3 of the pipe
+                elif between_pipes_count == 12:
+                    reward = 1 # reward for passing the pipe (12 ist allmost through)
                 else:   
                     reward = 0.1
                 
@@ -362,28 +361,27 @@ def preprocess_frame(frame):
     
     # Separate color channels
     blue = frame[:, :, 0] # most prommising chanel since pipes and bird very dark
-    green = frame[:, :, 1]
-    red = frame[:, :, 2]
+    #green = frame[:, :, 1]
+    #red = frame[:, :, 2]
     
-    cv2.imwrite("flappybird_blue.png", blue)
-    cv2.imwrite("flappybird_green.png", green)
-    cv2.imwrite("flappybird_red.png", red)
-    cv2.imwrite("flappybird_original.png", frame)
+    #cv2.imwrite("flappybird_blue.png", blue)
+    #cv2.imwrite("flappybird_green.png", green)
+    #cv2.imwrite("flappybird_red.png", red)
+    #cv2.imwrite("flappybird_original.png", frame)
     
     # Crop top and bottom  
     height = blue.shape[0]
     cropped = blue[90:height-150, :]
-    cv2.imwrite("flappybird_cropped.png", cropped)
+    #cv2.imwrite("flappybird_cropped.png", cropped)
     # Resize
-    resized = cv2.resize(cropped, (84, 84), interpolation=cv2.INTER_AREA)
-    cv2.imwrite("flappybird_resized.png", resized)
+    resized = cv2.resize(cropped, (84, 84), interpolation=cv2.INTER_AREA) # try 42x42 pixels
+    #cv2.imwrite("flappybird_resized.png", resized)
     
     
     # Apply threshold
-    threshold = 170 # 80 is fine
-    black_white = np.where(resized < threshold, 0, 255)
-    cv2.imwrite("flappybird_blacknwhite.png", black_white)
-    
+    threshold = 170 
+    black_white = np.where(resized < threshold, 0, 255) # TODO: change to inverted black and white 
+    #cv2.imwrite("flappybird_blacknwhite.png", black_white)
     
     # Normalize
     normalized = black_white / 255.0
