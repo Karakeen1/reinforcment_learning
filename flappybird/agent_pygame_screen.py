@@ -12,7 +12,7 @@ import random
 import torch
 from torch import nn
 import yaml
-from experience_replay import ReplayMemory
+from helper_functions import ReplayMemory, FrameStack
 from models import DQN, CNN
 from datetime import datetime, timedelta
 import argparse
@@ -22,6 +22,7 @@ import os
 import pygame
 import time
 import keyboard
+
 
 # printscreen
 import cv2
@@ -187,7 +188,7 @@ class Agent():
                 
                 else:
                     # Select action based on epsilon-greedy
-                    if (is_training and epsilon < 0.05 and episode % 50000 <= 5000 and episode % 50000 > 0) or raise_epsilon:
+                    if (is_training and epsilon < 0.05 and episode % 10000 <= 1000 and episode % 10000 > 0) or raise_epsilon:
                         if not raise_epsilon:
                             epsilon_checkin = epsilon
                         raise_epsilon = True
@@ -200,7 +201,7 @@ class Agent():
                         # select best action
                             with torch.no_grad():
                                 action = policy_cnn(state).squeeze().argmax()
-                        if episode % 50000 == 5000:
+                        if episode % 10000 == 1000:
                             epsilon = epsilon_checkin
                             raise_epsilon = False
                             #print(f"reset epsilon to {epsilon} and set raise_epsilon to {raise_epsilon}")
@@ -452,6 +453,9 @@ def preprocess_state(state):
         return state
     else:
         raise ValueError(f"Unexpected state shape: {state.shape}")
+    
+    
+
 
 
 if __name__ == '__main__':

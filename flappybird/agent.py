@@ -14,11 +14,11 @@ import torch
 from torch import nn
 import yaml
 
-from experience_replay import ReplayMemory
+from Programmieren.reinforcment_learning.flappybird.helper_functions import ReplayMemory
 from torch import nn
 import yaml # pip install pyyaml
 
-from experience_replay import ReplayMemory
+from Programmieren.reinforcment_learning.flappybird.helper_functions import ReplayMemory
 from models import DQN
 from models import CNN
 
