@@ -5,6 +5,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import matplotlib as plt
+import numpy as np
+
 
 class DQN(nn.Module):
 
@@ -48,7 +50,7 @@ class DQN(nn.Module):
         return Q
     
     
-class CNN(nn.Module):
+class CNN_1frame(nn.Module):
 
     def __init__(self, num_actions):
         super(CNN, self).__init__()
@@ -100,6 +102,39 @@ class CNN(nn.Module):
 
         return out
   
+  
+class CNN(nn.Module): # modified for 4 frames in stack
+
+    def __init__(self, num_actions):
+        super(CNN, self).__init__()
+        self.number_of_actions = num_actions
+
+        self.conv1 = nn.Conv2d(in_channels=4, out_channels=32, kernel_size=6, stride=3)
+        self.relu1 = nn.ReLU(inplace=True)
+
+        # Calculate the size of the flattened output
+        self.fc_input_dim = self._get_conv_output((4, 42, 42))
+        self.fc4 = nn.Linear(self.fc_input_dim, 1024)
+        
+        self.relu4 = nn.ReLU(inplace=True)
+        self.fc5 = nn.Linear(1024, self.number_of_actions)
+
+    def _get_conv_output(self, shape):
+        input = torch.rand(1, *shape)
+        output = self.conv1(input)
+        output = self.relu1(output)
+        return int(np.prod(output.size()))
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.relu1(out)
+        # print(f"Shape before flattening: {out.shape}")
+        out = out.view(out.size(0), -1)
+        # print(f"Shape after flattening: {out.shape}")
+        out = self.fc4(out)
+        out = self.relu4(out)
+        out = self.fc5(out)
+        return out
 
 if __name__ == '__main__':
     state_dim = 12

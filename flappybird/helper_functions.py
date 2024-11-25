@@ -1,6 +1,8 @@
 # Define memory for Experience Replay
 from collections import deque
 import random
+import torch
+
 class ReplayMemory_original():
     def __init__(self, maxlen, seed=None):
         self.memory = deque([], maxlen=maxlen)
@@ -34,18 +36,19 @@ class ReplayMemory:
     
     
 class FrameStack:
-    def __init__(self, num_stack=4):
+    def __init__(self, num_stack=4, device='cpu'):
         self.num_stack = num_stack
         self.frames = deque([], maxlen=num_stack)
+        self.device = device
 
     def reset(self):
         for _ in range(self.num_stack):
-            self.frames.append(torch.zeros(1, 32, 32))
+            self.frames.append(torch.zeros(1, 42, 42, device=self.device))
         return self.get_state()
 
     def add_frame(self, frame):
-        assert frame.shape == (1, 32, 32), "Frame should be of shape (1, 32, 32)"
-        self.frames.append(frame)
+        assert frame.shape == (1, 42, 42), "Frame should be of shape (1, 42, 42)"
+        self.frames.append(frame.to(self.device))
         return self.get_state()
 
     def get_state(self):

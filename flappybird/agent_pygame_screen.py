@@ -40,7 +40,7 @@ os.makedirs(RUNS_DIR, exist_ok=True)
 
 matplotlib.use('Agg')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-# device = 'cpu'
+device = 'cpu' # uncomment to force cpu
 print(f"using {device}") 
 
 class Agent():
@@ -75,7 +75,7 @@ class Agent():
         self.MODEL_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.pt')
         self.GRAPH_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.png')
 
-    def run(self, is_training=True, render=False):
+    def run(self, is_training=True, render=False, pretrained_model_path=None):
         if is_training:
             start_time = datetime.now()
             last_graph_update_time = start_time
@@ -93,12 +93,17 @@ class Agent():
         rewards_per_episode = []
         #policy_dqn = DQN(num_states, num_actions, self.fc1_nodes).to(device)
         policy_cnn = CNN(num_actions).to(device)
+
+        frame_stack = FrameStack(num_stack=4, device=device)
+        
         
         if is_training:
             epsilon = self.epsilon_init
             memory = ReplayMemory(self.replay_memory_size)
             # target_dqn = DQN(num_states, num_actions, self.fc1_nodes).to(device)
             # target_dqn.load_state_dict(policy_dqn.state_dict())
+            
+
             target_cnn = CNN(num_actions).to(device)
             target_cnn.load_state_dict(policy_cnn.state_dict())
             self.optimizer = torch.optim.Adam(policy_cnn.parameters(), lr=self.learning_rate_a)
@@ -114,6 +119,7 @@ class Agent():
         pygame.display.set_caption("flappybird")
         screen = pygame.display.set_mode((288, 512))  # Adjust size to match your Flappy Bird window
         clock = pygame.time.Clock()
+       
         humaninput_episodes = 0  # human control to give a head start
         env_step_count = 0
         
@@ -124,6 +130,7 @@ class Agent():
                 print(f"starting with human input for {humaninput_episodes} episodes")
 
         for episode in itertools.count():
+            
             print_n_episodes = 1000
             if episode % print_n_episodes == 0:
                 if episode == 0:  
@@ -136,10 +143,13 @@ class Agent():
                     print(f"Episode {episode} started, time for {print_n_episodes} episodes: {n_episodes_timer} seconds, Steps: {env_step_count}, Steprate: {env_steps_rate} steps/second")
                     episode_start_time = datetime.now()
                     env_step_count = 0 
-                    
-                
-            state, _ = env.reset()
             
+            # Initialize state_stack with zeros        
+            state = frame_stack.reset()  
+            new_state = frame_stack.reset()
+              
+            #state, _ = env.reset()
+            env.reset()
             # state = torch.tensor(state, dtype=torch.float, device=device)
             # print(f"state from env: {state}, shape: {state.shape}")
             terminated = False
@@ -153,9 +163,16 @@ class Agent():
             
             #cv2.imshow('Screenshot', screenshot)
             frame_array = preprocess_frame(screenshot) # shape tupple (84, 84)          
+            
             state = torch.tensor(frame_array, dtype=torch.float, device=device)
-            state = preprocess_state(state)  # Now state has shape [1, 1, 84, 84]
+            state = preprocess_state(state)  # Now state has shape [1, 1, x, y]
+            #print(f"state from image: {state}, shape: {state.shape}")
+            state = frame_stack.add_frame(state)
+            #print(state.dim())
             # print(f"state from image: {state}, shape: {state.shape}")
+            
+            
+            
             
             if episode % 10 == 0 and humaninput_episodes > episode and episode != 0:
                 print(f"{episode} episodes of {humaninput_episodes} humaninput episodes passed")
@@ -188,7 +205,8 @@ class Agent():
                 
                 else:
                     # Select action based on epsilon-greedy
-                    if (is_training and epsilon < 0.05 and episode % 10000 <= 1000 and episode % 10000 > 0) or raise_epsilon:
+                    use_higher_epsilon_after_n_episodes = False
+                    if (use_higher_epsilon_after_n_episodes and is_training and epsilon < 0.05 and episode % 10000 <= 1000 and episode % 10000 > 0) or raise_epsilon:
                         if not raise_epsilon:
                             epsilon_checkin = epsilon
                         raise_epsilon = True
@@ -200,7 +218,9 @@ class Agent():
                         else:
                         # select best action
                             with torch.no_grad():
-                                action = policy_cnn(state).squeeze().argmax()
+                                state = state.unsqueeze(0)  # Add batch dimension
+                                # action = policy_cnn(state).squeeze().argmax()
+                                action = policy_cnn(state).argmax(dim=-1)
                         if episode % 10000 == 1000:
                             epsilon = epsilon_checkin
                             raise_epsilon = False
@@ -214,8 +234,12 @@ class Agent():
                         # select best action
                         with torch.no_grad():
                             # Add batch and channel dimensions
-                            # with unsqueeze(0).unsqueeze(0) New shape: (1, 1, 84, 84)
-                            action = policy_cnn(state).squeeze().argmax()
+                            # with unsqueeze(0).unsqueeze(0) New shape: (1, 1, x, y)
+                            state = state.unsqueeze(0)  # Add batch dimension
+                            #print(f"State shape before CNN: {state.shape}")
+                            # action = policy_cnn(state).squeeze().argmax()
+                            action = policy_cnn(state).argmax(dim=-1)
+
 
                 # use environment only for termination, all other extracted from image
                 env_new_state, env_reward, terminated, truncated, info = env.step(action.item())
@@ -225,11 +249,11 @@ class Agent():
                 screenshot = screenshot.transpose([1, 0, 2])  # Transpose to get the correct orientation
                 screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
                 
-                frame_array = preprocess_frame(screenshot) # shape tupple (84, 84)
+                frame_array = preprocess_frame(screenshot) # shape tupple (x, y)
                 
                 new_state = torch.tensor(frame_array, dtype=torch.float, device=device)
-                new_state = preprocess_state(state)  # Now state has shape [1, 1, 84, 84]
-                
+                new_state = preprocess_state(new_state)  # Now state has shape [1, 1, x, y]
+                new_state = frame_stack.add_frame(new_state)
                 
                 # Analyse frame array for reward:
                 # at pixel x= 22 the bird is all black for 84x84
@@ -261,6 +285,7 @@ class Agent():
                     step_count += 1
 
                 state = new_state
+                
 
             rewards_per_episode.append(episode_reward)
 
@@ -347,7 +372,9 @@ class Agent():
         # Remove the extra dimension
         states = states.squeeze(1)  # This will change shape from [batch_size, 1, 1, 84, 84] to [batch_size, 1, 84, 84]
 
-        actions = torch.stack(actions)
+        # Handle potential inconsistencies in actions
+        actions = [action.unsqueeze(0) if action.dim() == 0 else action for action in actions]
+        actions = torch.cat(actions).to(device)
         new_states = torch.stack(new_states)
         rewards = torch.stack(rewards)
         terminations = torch.tensor(terminations).float().to(device)
@@ -441,7 +468,7 @@ def preprocess_frame(frame):
     return normalized
 
 
-def preprocess_state(state):
+def preprocess_state_1frame(state): # used if only 1 frame is passed in CNN
     if state.dim() == 2:
         # Add channel and batch dimensions
         return state.unsqueeze(0).unsqueeze(0)
@@ -449,6 +476,17 @@ def preprocess_state(state):
         # Add batch dimension
         return state.unsqueeze(0)
     elif state.dim() == 4:
+        # Already in correct format
+        return state
+    else:
+        raise ValueError(f"Unexpected state shape: {state.shape}")
+    
+    
+def preprocess_state(state): # used if 4 frames are passed
+    if state.dim() == 2:
+        # Add channel dimension
+        return state.unsqueeze(0)
+    elif state.dim() == 3:
         # Already in correct format
         return state
     else:
