@@ -34,7 +34,7 @@ import pyautogui
 
 DATE_FORMAT = "%m-%d %H:%M:%S"
 run_folder = "" #
-run_folder = datetime.now().strftime('%y%m%d_%H%M') # uncomment to save in a run sub folder with date
+#run_folder = datetime.now().strftime('%y%m%d_%H%M') # uncomment to save in a run sub folder with date
 RUNS_DIR = f"C:\\Users\\mmose\\OneDrive\\Programmieren\\reinforcment_learning\\flappybird\\runs\\{run_folder}"
 os.makedirs(RUNS_DIR, exist_ok=True)
 
@@ -102,10 +102,14 @@ class Agent():
             memory = ReplayMemory(self.replay_memory_size)
             # target_dqn = DQN(num_states, num_actions, self.fc1_nodes).to(device)
             # target_dqn.load_state_dict(policy_dqn.state_dict())
-            
-
-            target_cnn = CNN(num_actions).to(device)
-            target_cnn.load_state_dict(policy_cnn.state_dict())
+            if pretrained_model_path:
+                policy_cnn.load_state_dict(torch.load(pretrained_model_path, weights_only=True))
+                target_cnn = CNN(num_actions).to(device)
+                target_cnn.load_state_dict(policy_cnn.state_dict())
+                print(f"Loaded pre-trained model from {pretrained_model_path}")
+            else:
+                target_cnn = CNN(num_actions).to(device)
+                target_cnn.load_state_dict(policy_cnn.state_dict())
             self.optimizer = torch.optim.Adam(policy_cnn.parameters(), lr=self.learning_rate_a)
             epsilon_history = []
             step_count = 0
@@ -245,9 +249,14 @@ class Agent():
                 env_new_state, env_reward, terminated, truncated, info = env.step(action.item())
                 env_step_count += 1
                 
+                if terminated and episode_reward > 10000:
+                    cv2.imwrite(f"flappybird_{episode}.png", screenshot)
+                    
+                
                 screenshot = pygame.surfarray.array3d(screen)
                 screenshot = screenshot.transpose([1, 0, 2])  # Transpose to get the correct orientation
                 screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
+                
                 
                 frame_array = preprocess_frame(screenshot) # shape tupple (x, y)
                 
@@ -459,7 +468,7 @@ def preprocess_frame(frame):
     # Apply threshold
     threshold = 170 
     #black_white = np.where(resized > threshold, 0, 255)
-    normalized = np.where(resized > threshold, 0, 1) #  allready normalized 0 for 
+    normalized = np.where(resized > threshold, 0, 1) #  allready normalized with 0 and 1 
     #cv2.imwrite("flappybird_blacknwhite.png", black_white)
     
     # Normalize
@@ -494,16 +503,15 @@ def preprocess_state(state): # used if 4 frames are passed
     
     
 
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train or test model.')
     parser.add_argument('hyperparameters', help='')
     parser.add_argument('--train', help='Training mode', action='store_true')
+    parser.add_argument('--pretrained', help='Path to pre-trained model', type=str, default=None)
     args = parser.parse_args()
 
     dql = Agent(hyperparameter_set=args.hyperparameters)
     if args.train:
-        dql.run(is_training=True)
+        dql.run(is_training=True, pretrained_model_path=args.pretrained)
     else:
-        dql.run(is_training=False, render=True)
+        dql.run(is_training=False, render=True, pretrained_model_path=args.pretrained)
