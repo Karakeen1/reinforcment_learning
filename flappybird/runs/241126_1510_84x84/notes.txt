@@ -1,0 +1,21 @@
+changed learning_rate_a after episode 10300 from 0.0003 to 0.0001
+changed learning_rate to 0.00005 after episode 13000
+
+
+flappybird1:
+  env_id: FlappyBird-v0
+  replay_memory_size: 100000 # frames saved in memory: 1 episode without action (just fall) is about 30 frames, to first pipe about 40 frames
+  mini_batch_size: 32
+  epsilon_init: 0.012
+  epsilon_decay: 0.9999 # 
+  epsilon_offset: 0 #10000 # episodes with stable espilon_init
+  epsilon_min: 0.0
+  network_sync_rate: 10
+  learning_rate_a: 0.0003
+  discount_factor_g: 0.99
+  stop_on_reward: 100000
+  fc1_nodes: 1024
+  env_make_params:
+    use_lidar: False
+  enable_double_dqn: True
+  enable_dueling_dqn: False

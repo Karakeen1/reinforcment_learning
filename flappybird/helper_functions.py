@@ -35,7 +35,7 @@ class ReplayMemory:
         return len(self.memory)
     
     
-class FrameStack:
+class FrameStack42:
     def __init__(self, num_stack=4, device='cpu'):
         self.num_stack = num_stack
         self.frames = deque([], maxlen=num_stack)
@@ -48,6 +48,26 @@ class FrameStack:
 
     def add_frame(self, frame):
         assert frame.shape == (1, 42, 42), "Frame should be of shape (1, 42, 42)"
+        self.frames.append(frame.to(self.device))
+        return self.get_state()
+
+    def get_state(self):
+        return torch.cat(list(self.frames), dim=0)
+    
+    
+class FrameStack:
+    def __init__(self, num_stack=4, device='cpu'):
+        self.num_stack = num_stack
+        self.frames = deque([], maxlen=num_stack)
+        self.device = device 
+
+    def reset(self):
+        for _ in range(self.num_stack):
+            self.frames.append(torch.zeros(1, 84, 84, device=self.device))
+        return self.get_state()
+
+    def add_frame(self, frame):
+        assert frame.shape == (1, 84, 84), "Frame should be of shape (1, 84, 84)"
         self.frames.append(frame.to(self.device))
         return self.get_state()
 
