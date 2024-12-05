@@ -64,25 +64,10 @@ class CNN_1frame(nn.Module):
         self.minibatch_size = 32
         """
 
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=6, stride=3)
-        # in_channels represents the number of input channels (or depth) of the input tensor to this convolutional layer.
-        # Grayscale images usually have 1 channel
-        # RGB color images typically have 3 channels (Red, Green, Blue)
-        # Some image formats or feature maps might have 4 channels (e.g., RGBA with an alpha channel for transparency)
-
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=6, stride=3) # in Channel 1 for one b&w frame
+      
         self.relu1 = nn.ReLU(inplace=True)
-        #self.conv2 = nn.Conv2d(32, 64, 4, 2)
-        #self.relu2 = nn.ReLU(inplace=True)
-        #self.conv3 = nn.Conv2d(64, 64, 3, 1)
-        #self.relu3 = nn.ReLU(inplace=True)
-              
-        # for 84x84 image
-        #self.fc4 = nn.Linear(3136, 512)
-
-        # Changed from 3136 to 64  for 42x42 image input
-        #self.fc4 = nn.Linear(32, 512)
-        
-        # only 1 conv layer
+        # only 1 conv layer, deleted layer 2 and 3
         self.fc4 = nn.Linear(32*13*13, 1024) # 2592
            
         self.relu4 = nn.ReLU(inplace=True)
@@ -91,10 +76,6 @@ class CNN_1frame(nn.Module):
     def forward(self, x):
         out = self.conv1(x)
         out = self.relu1(out)
-       # out = self.conv2(out)
-       # out = self.relu2(out)
-       # out = self.conv3(out)
-       # out = self.relu3(out)
         out = out.view(out.size()[0], -1)
         out = self.fc4(out)
         out = self.relu4(out)
@@ -103,7 +84,7 @@ class CNN_1frame(nn.Module):
         return out
   
   
-class CNN_4frames(nn.Module): # modified for 4 frames in stack
+class CNN_4frames(nn.Module): # modified for 4 frames in stack with 42 pixels input
 
     def __init__(self, num_actions):
         super(CNN, self).__init__()
@@ -128,15 +109,14 @@ class CNN_4frames(nn.Module): # modified for 4 frames in stack
     def forward(self, x):
         out = self.conv1(x)
         out = self.relu1(out)
-        # print(f"Shape before flattening: {out.shape}")
         out = out.view(out.size(0), -1)
-        # print(f"Shape after flattening: {out.shape}")
         out = self.fc4(out)
         out = self.relu4(out)
         out = self.fc5(out)
         return out
+  
     
-class CNN(nn.Module): # Atari setup wit for 4 frames 84x84 pixels in stack
+class CNN(nn.Module): # for 4 frames 84x84 pixels in stack
 
     def __init__(self, num_actions):
         super(CNN, self).__init__()
@@ -150,7 +130,13 @@ class CNN(nn.Module): # Atari setup wit for 4 frames 84x84 pixels in stack
         self.relu3 = nn.ReLU(inplace=True)
         self.fc4 = nn.Linear(3136, 1024)
         self.relu4 = nn.ReLU(inplace=True)
-        self.fc5 = nn.Linear(1024, self.number_of_actions)
+        self.fc5 = nn.Linear(1024, self.number_of_actions) # actions = 2
+        
+        # image size x times y times channels
+        # After conv1: 20x20x32
+        # After conv2: 9x9x64
+        # After conv3: 7x7x64
+        # flattened to a 1D tensor of size 3136 (7 * 7 * 64) passed to fully connected layer fc4.
 
     def forward(self, x):
         out = self.conv1(x)
@@ -164,6 +150,7 @@ class CNN(nn.Module): # Atari setup wit for 4 frames 84x84 pixels in stack
         out = self.relu4(out)
         out = self.fc5(out)
         return out
+
 
 if __name__ == '__main__':
     state_dim = 12

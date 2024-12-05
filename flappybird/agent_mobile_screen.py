@@ -29,6 +29,8 @@ import cv2
 from PIL import Image
 import pygetwindow as gw
 import pyautogui
+from mss import mss
+from contextlib import contextmanager
 
 
 
@@ -92,7 +94,7 @@ class Agent():
         policy_cnn = CNN(num_actions).to(device)
 
         frame_stack = FrameStack(num_stack=4, device=device)
-        
+        best_reward = -9999999
         
         if is_training:
             epsilon = self.epsilon_init
@@ -117,12 +119,13 @@ class Agent():
 
         # initialize game
         # for the moment manually 
-        wc = WindowCapture()
-
-        humaninput_episodes = 0  # human control to give a head start
+        wc = WindowCapture_mss()
+        wc.get_window()
+        humaninput_episodes = 100 # human control to give a head start
         env_step_count = 0
-        runtime = 60 # seconds
+        runtime = 0 # seconds, put 0 to deactivate
         break_timer = time.time()
+        epsilon = self.epsilon_init
         
         
         raise_epsilon = False
@@ -130,17 +133,17 @@ class Agent():
         
         if humaninput_episodes > 0:
                 print(f"starting with human input for {humaninput_episodes} episodes")
-
+                
         for episode in itertools.count():
-            
-            print_n_episodes = 1000
+            click()
+            print_n_episodes = 100
             if episode % print_n_episodes == 0:
                 if episode == 0:  
                     episode_start_time = datetime.now()
                 else:
                     episode_end_time = datetime.now()
                     n_episodes_timer = episode_end_time - episode_start_time
-                    n_episodes_timer = int(n_episodes_timer.total_seconds())
+                    n_episodes_timer = int(n_episodes_timer.total_seconds()) # n_episode * 2 seconds for waiting after termination 
                     env_steps_rate = env_step_count / n_episodes_timer
                     print(f"Episode {episode} started, time for {print_n_episodes} episodes: {n_episodes_timer} seconds, Steps: {env_step_count}, Steprate: {env_steps_rate} steps/second")
                     episode_start_time = datetime.now()
@@ -150,15 +153,20 @@ class Agent():
             state = frame_stack.reset()  
             new_state = frame_stack.reset()
               
-            terminated = False
             episode_reward = 0.0
+            terminated = False
+            no_movement_count = 0
+            white_pixel_count = 0
+            between_pipe_count = 0
+            gap_center = 42 # Initialize in the middle for the first frame
+            time_it = time.time()
             
-           
-            wc.get_window()
-            screenshot, terminated = wc.get_screenshot()
+                   
+            #wc.get_window()
+            screenshot = wc.get_screenshot()
             
             #cv2.imshow('Screenshot', screenshot)
-            frame_array = preprocess_frame(screenshot) # shape tupple (84, 84)          
+            frame_array = preprocess_frame(screenshot, env_step_count) # shape tupple (84, 84)          
             
             state = torch.tensor(frame_array, dtype=torch.float, device=device)
             state = preprocess_state(state)  # Now state has shape [1, 1, x, y]
@@ -167,77 +175,47 @@ class Agent():
             #print(state.dim())
             # print(f"state from image: {state}, shape: {state.shape}")
             
-            if terminated:
-                time.sleep(0.5)
-                click()
-                time.sleep(2)
-                click()
-            else:
-                click()
+           
+            if humaninput_episodes % 10 == 0 and humaninput_episodes > 0:
+                print(f"{humaninput_episodes} humaninput episodes to play")
+            humaninput_episodes -= 1
             
+            if humaninput_episodes == 0: # change speed in last human interaction episode
+                print(f"RL takes over")  
             
-            if episode % 10 == 0 and humaninput_episodes > episode and episode != 0:
-                print(f"{episode} episodes of {humaninput_episodes} humaninput episodes passed")
-
+            if humaninput_episodes < 0:
+                humaninput_episodes = 0
+            
             while(not terminated and episode_reward < self.stop_on_reward):
                 
                 ###############################################
                 # start RL training after some initial manual rounds
                 ###############################################
-                if episode < humaninput_episodes:
-                    # Set default action to 0 (do nothing)
-                    action = 0
-
-                    for event in pygame.event.get():
-                        if event.type == pygame.QUIT:
-                            pygame.quit()
-                            return False
-                        if event.type == pygame.KEYDOWN:
-                            if event.key == pygame.K_SPACE:
-                                action = 1  # Flap
-                                
+                if humaninput_episodes:
+                    action = humancontrole() # press scpacebar for 1, else 0
+                    if action == 1:
+                        click()      
                     # Convert action to tensor
                     action = torch.tensor(action, dtype=torch.int64, device=device)
+                
                 
                     if episode +1 == humaninput_episodes: # change speed in last human interaction episode
                         print(f"RL takes over")
                         humaninput_episodes = 0                   
+            
+                    if episode +1 == humaninput_episodes: # change speed in last human interaction episode
+                        print(f"RL takes over")
+                        humaninput_episodes = 0                   
                 
-                else:
-                    # Select action based on epsilon-greedy
-                    use_higher_epsilon_after_n_episodes = False
-                    if (use_higher_epsilon_after_n_episodes and is_training and epsilon < 0.05 and episode % 10000 <= 1000 and episode % 10000 > 0) or raise_epsilon:
-                        if not raise_epsilon:
-                            epsilon_checkin = epsilon
-                        raise_epsilon = True
-                        epsilon = 0.125
-                        #print(f"episode % 100 = {episode%100}")
-                        if random.random() < epsilon:
-                            if random.random() <= 0.5:
-                                click() # click on handy screen 50% chance
-                                action = torch.tensor(1, dtype=torch.int64, device=device) # 1 = jump
-                            else:
-                                action = torch.tensor(0, dtype=torch.int64, device=device) # 0 = no action
-                            print(f"random action: {action.item()}")
-                        else:
-                        # select best action
-                            with torch.no_grad():
-                                state = state.unsqueeze(0)  # Add batch dimension
-                                # action = policy_cnn(state).squeeze().argmax()
-                                action = policy_cnn(state).argmax(dim=-1)
-                        if episode % 10000 == 1000:
-                            epsilon = epsilon_checkin
-                            raise_epsilon = False
-                            #print(f"reset epsilon to {epsilon} and set raise_epsilon to {raise_epsilon}")
-                                
-                    elif is_training and random.random() < epsilon:
+                else:               
+                    if is_training and random.random() < epsilon:
                         # select random action
                         if random.random() <= 0.5:
                             click() # click on handy screen 50% chance
                             action = torch.tensor(1, dtype=torch.int64, device=device) # 1 = jump
                         else:
                             action = torch.tensor(0, dtype=torch.int64, device=device) # 0 = no action
-                        print(f"random action: {action.item()}")
+                        #print(f"random action: {action.item()}")
                     else:
                         # select best action
                         with torch.no_grad():
@@ -248,53 +226,69 @@ class Agent():
                             # action = policy_cnn(state).squeeze().argmax()
                             action = policy_cnn(state).argmax(dim=-1)
                             if action.item() == 1:
-                                 click() # click on handy screen
-                            print(f"CNN action: {action.item()}")
+                                click() # click on handy screen
+                            #print(f"CNN action: {action.item()}")
 
-                # use environment only for termination, all other extracted from image
+                    
+                previous_screenshot = screenshot
+                
+                #wc.get_window()
+               
+                screenshot = wc.get_screenshot()
+               
+                frame_array = preprocess_frame(screenshot, env_step_count) # shape tupple (x, y), checks pixel if start sign is there
+            
+                # use environment  for termination not available anymore, look for white screen
+                white_pixel_count_for_termination = np.sum(frame_array)
+                #print("screen white pixel count:",white_pixel_count_for_termination)
+                if white_pixel_count_for_termination > 2200:
+                    terminated = True
+                    #print("Termintadet, white pixel count:",white_pixel_count_for_termination)
                 #env_new_state, env_reward, terminated, truncated, info = env.step(action.item())
                 env_step_count += 1
                 
-                if terminated and episode_reward > 10:
-                    cv2.imwrite(f"flappybird_{episode}.png", screenshot)
-                    
-                wc.get_window()
-                screenshot, terminated = wc.get_screenshot()
-
-                if not terminated:
-                    frame_array = preprocess_frame(screenshot) # shape tupple (x, y), checks pixel if start sign is there
-                    
-                    new_state = torch.tensor(frame_array, dtype=torch.float, device=device)
-                    new_state = preprocess_state(new_state)  # Now state has shape [1, 1, x, y]
-                    new_state = frame_stack.add_frame(new_state)
-                else:
-                    print("terminated")
-                    time.sleep(0.5)
-                    click()
-                    time.sleep(2)
-                    click()
                 
+                
+                new_state = torch.tensor(frame_array, dtype=torch.float, device=device)
+                new_state = preprocess_state(new_state)  # Now state has shape [1, 1, x, y]
+                new_state = frame_stack.add_frame(new_state)
+
+
                 # Analyse frame array for reward:
                 # at pixel x= 22 the bird is all black for 84x84
                 # bird 42x42 at pixel 11, 3 after cropping left
-                white_pixel_count = np.sum(frame_array[:, 3])
-                #print(white_pixel_count)
+                #white_pixel_count = np.sum(frame_array[:, 3])
+                prev_gap_center = gap_center 
+                white_pixel_count, bird_position, gap_center = analyze_vertical_lines(frame_array, prev_gap_center)
+                #print("white pixel count",white_pixel_count)
+                game_over_white_pixels = np.sum(frame_array[33, :])
+                #print(f"white pxiel count: {white_pixel_count},  ***   gameover pixels: {game_over_white_pixels}")
+                if game_over_white_pixels == 0:
+                    no_movement_count += 1
+                    #print(no_movement_count)
+                else:
+                    no_movement_count = 0
+                
+                if game_over_white_pixels > 40 or no_movement_count > 200:
+                    terminated = True
+                    
+
                 #time.sleep(0.1)
                 # >= 76 pixel bird without pipe (<= 4 for 42x42 bw inverted)
-                # <= 35 pixel bird between pipes, goes on for ~13..14 frames (>=29 42x42 bw inverted)
+                # >= 65 pixel bird between pipes, goes on for ~13..14 frames
                 # == 0 pixel out of bounds
                 #print(white_pixel_count)
                 if terminated:
-                    reward = -2 # dying
-                elif white_pixel_count >= 25 :
-                    reward = 0.3 # reward for passing the pipe. total ~4
+                    reward = -30 # dying
+                elif white_pixel_count >= 50 :
+                    reward = 2.5 # reward for passing the pipe. total ~25
                 else:   
-                    reward = 0.1
+                    #reward = 0.05 # 
+                    reward = 0.5 * abs(1 / (np.sqrt(abs(gap_center - bird_position)) + 1))
                 #print(reward)
                 episode_reward += reward
-                # new_state = torch.tensor(new_state, dtype=torch.float, device=device)
                 reward = torch.tensor(reward, dtype=torch.float, device=device)
-                
+                print(f"bird {bird_position}, gap {gap_center}, reward {reward}")
 
                 if is_training:
                     # memory.append((state, action, new_state, reward, terminated))
@@ -302,13 +296,26 @@ class Agent():
                     step_count += 1
 
                 state = new_state
-                time.sleep(0.030) # wait 30ms for 30fps game
+                epsilon, humaninput_episodes = listen_on_e(self, epsilon, humaninput_episodes)
+                              
+                if terminated:
+                    #print("game over")
+                    click()
+                    time.sleep(0.001)
+                    click()
                 
-                listen_for_t()
                 
-                
-
+            if time.time() > break_timer+runtime and runtime != 0:
+                    break   
+            
+            
+            if terminated and episode_reward > best_reward*0.9 and episode_reward>1000:
+                cv2.imwrite(f"flappybird_mob_{episode}_previous_screenshot.png", previous_screenshot)
+                cv2.imwrite(f"flappybird_mob_{episode}_last_screenshot.png", screenshot)
+            
+            
             rewards_per_episode.append(episode_reward)
+            epsilon, humaninput_episodes = listen_on_e(self, epsilon, humaninput_episodes)
 
             if is_training:
                 if episode_reward > best_reward:
@@ -318,6 +325,14 @@ class Agent():
                         file.write(log_message + '\n')
                     torch.save(policy_cnn.state_dict(), self.MODEL_FILE)
                     best_reward = episode_reward
+                    
+                if episode % 200 == 0:
+                    log_message = f"{datetime.now().strftime(DATE_FORMAT)}: Backup at episode {episode}, saving model..."
+                    print(log_message)
+                    with open(self.LOG_FILE, 'a') as file:
+                        file.write(log_message + '\n')
+                    torch.save(policy_cnn.state_dict(), os.path.join(RUNS_DIR, f'backup_model_{episode}.pt'))
+
                     
                 current_time = datetime.now()
                 if current_time - last_graph_update_time > timedelta(seconds=10):
@@ -336,8 +351,7 @@ class Agent():
                     target_cnn.load_state_dict(policy_cnn.state_dict())
                     step_count = 0
                     
-            listen_for_t()
-            
+      
 
         
         
@@ -447,57 +461,106 @@ class WindowCapture:
         height = bottom - top
 
         # Capture screenshot
-        screenshot = pyautogui.screenshot(region=(left+9, top+6, width-18, height-16))
-        pixel_color = screenshot.getpixel((280, 650))
-        if pixel_color[0] < 200 and pixel_color[2] > 75:
-            terminated = True
-        else:
-            terminated = False
+        screenshot = pyautogui.screenshot(region=(730, 30, 460, 1000))
+        
         # Convert PIL Image to NumPy array
         screenshot = np.array(screenshot)
         # Convert RGB to BGR (OpenCV uses BGR)
         screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
-        #cv2.imwrite("scrcpy_screenshot.png", screenshot)
+        # cv2.imwrite("mobile_screenshot.png", screenshot)
         # Convert to numpy array
-        return screenshot, terminated
+        return screenshot
+   
+   
+  
+
+class WindowCapture_mss:
+    def get_window(self):
+        self.sct = mss()
+
+    @contextmanager
+    def get_screenshot_context(self):
+        with mss() as sct:
+            try:
+                yield sct
+            finally:
+                # Cleanup will happen automatically when exiting the context
+                pass
+
+    def get_screenshot(self):
+        with self.get_screenshot_context() as sct:
+            monitor = {"top": 30, "left": 730, "width": 458, "height": 1000}
+            screenshot = np.array(self.sct.grab(monitor))
+            #screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGBA2BGR)
+            #cv2.imwrite("mobile_screenshot.png", screenshot)
+            return  screenshot
    
     
-def preprocess_frame(frame):
-    # Convert to grayscale
-    # gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-    # Resize
-    # resized = cv2.resize(black_white, (84, 84), interpolation=cv2.INTER_AREA)
-    
-    
+def preprocess_frame(frame, env_step_count):
     # Separate color channels
-    blue = frame[:, :, 0] # most prommising chanel since pipes and bird very dark
+    blue = frame[:, :, 0] # most prommising channel since pipes and bird very dark
     #green = frame[:, :, 1]
     #red = frame[:, :, 2]
-    
-    #cv2.imwrite("scrcpy_blue.png", blue)
-    #cv2.imwrite("scrcpy_green.png", green)
-    #cv2.imwrite("scrcpy_red.png", red)
-    #cv2.imwrite("scrcpy_original.png", frame)
-    
-    # Crop top, bottom and left (behind the bird unnecessary information)
-    height = blue.shape[0]
-    cropped = blue[140:height-280, 100:]
-    #cv2.imwrite("scrcpy_cropped.png", cropped)
-    # Resize
-    resized = cv2.resize(cropped, (42, 42), interpolation=cv2.INTER_AREA) # try 42x42 pixels
-    #cv2.imwrite("scrcpy_resized.png", resized)
-    
-    
-    # Apply threshold
-    threshold = 170 
-    normalized = np.where(resized > threshold, 1, 0) #  allready normalized with 1 and 0 (inverted compared to pygame_screen since bird and pipes are clear, backround dark)
-    #cv2.imwrite("scrcpy_blacknwhite.png", normalized)
-    
-    # Normalize
-    #normalized = normalized / 255.0
 
+    height = frame.shape[0]
+
+    # cropped = blue[145:height-262, 70:]
+    cropped = blue[82:height-200, 70:]
+    #cv2.imwrite("mobile_blue_cropped.png", cropped)
+    # Resize
+    resized = cv2.resize(cropped, (84, 84), interpolation=cv2.INTER_AREA) 
+    #cv2.imwrite("mobile_resized.png", resized)
+    
+    output = np.zeros_like(resized)
+    threshold_black = 5  # Define a threshold for "close to black"
+    resized[:75] = np.where(resized[:75] <= threshold_black, 255, resized[:75])
+    
+    # Apply threshold of 170 for the top 75 pixels
+    threshold_top = 170
+    output[:75] = np.where(resized[:75] > threshold_top, 0, 1)
+
+    # Apply threshold of 111 for the bottom 9 pixels
+    threshold_bottom = 100
+    output[75:] = np.where(resized[75:] > threshold_bottom, 0, 1)
+    
+    #print_output = output * 255
+    #cv2.imwrite("mobile_filtered_bandw.png", print_output)
+    
+  
     #print(normalized)
-    return normalized
+    return output
+
+
+
+def analyze_vertical_lines(binary_image, prev_gap_center):
+    # For x=11 (bird detection)
+    column_4 = binary_image[:, 3]  # 0-based indexing
+    white_count = np.sum(column_4)
+    
+    # Get first black to white transition for bird detection
+    transitions = np.where(np.diff(column_4) > 0)[0]
+    bird_position = transitions[0] if len(transitions) > 0 else -1
+    
+    # For x=84 (pipe gap) - only if enough white pixels present
+    column_83 = binary_image[:, 82]  # 0-based indexing
+    white_count_83 = np.sum(column_83)
+    #print(white_count_83)
+    if white_count_83 > 50:
+        transitions_all = np.where(np.diff(column_83) != 0)[0]
+        if len(transitions_all) >= 2:
+            # First transition should be white->black (top pipe)
+            pipe_top = transitions_all[0] + 1
+            # Second transition should be black->white (gap)
+            pipe_bottom = transitions_all[1] + 1
+            gap_center = (pipe_top + pipe_bottom) // 2
+        else:
+            gap_center = prev_gap_center
+    else:
+        gap_center = prev_gap_center
+        
+    return white_count, bird_position, gap_center
+
+
 
 
 def preprocess_state_1frame(state): # used if only 1 frame is passed in CNN
@@ -525,15 +588,62 @@ def preprocess_state(state): # used if 4 frames are passed
         raise ValueError(f"Unexpected state shape: {state.shape}")
     
     
-def click(click_position = (500, 650), n=1): 
+def click(click_position = (960, 450), n=1): 
     pyautogui.click(click_position)
 
     
-def listen_for_t():
-    if keyboard.is_pressed('t'):
-        print("'t' pressed. Pausing for 5 seconds...")
-        time.sleep(5)
-        print("Resumed.")
+
+        
+def listen_on_e(self, epsilon, human_input_episodes):
+    if keyboard.is_pressed('e'):
+        def edit_mode(epsilon, human_input_episodes):
+            print("\nEntering edit mode. Press 'q' to exit.")
+            while True:
+                print("\nCurrent hyperparameters:")
+                print(f"1. learning_rate_a: {self.learning_rate_a}")
+                print(f"2. epsilon: {epsilon}")
+                print(f"3. epsilon_decay: {self.epsilon_decay}")
+                print(f"4. stop_on_reward: {self.stop_on_reward}")
+                print(f"5. mini_batch_size: {self.mini_batch_size}")
+                print(f"6. human_input_episodes: {human_input_episodes}")
+                
+                choice = input("\nEnter the number of the parameter to change (or 'q' to quit): ")
+                
+                if choice.lower() == 'q':
+                    break
+                
+                if choice in ['1', '2', '3', '4', '5', '6']:
+                    new_value = input("Enter new value: ")
+                    if choice == '1':
+                        self.learning_rate_a = float(new_value)
+                    elif choice == '2':
+                        epsilon = float(new_value)
+                    elif choice == '3':
+                        self.epsilon_decay = float(new_value)
+                    elif choice == '4':
+                        self.stop_on_reward = int(new_value)
+                    elif choice == '5':
+                        self.mini_batch_size = int(new_value)
+                    elif choice == '6':
+                        human_input_episodes = int(new_value)
+                    print(f"Updated successfully!")
+                else:
+                    print("Invalid choice. Please try again.")
+            
+            print("Exiting edit mode.")
+            return epsilon, human_input_episodes
+
+        epsilon, human_input_episodes = edit_mode(epsilon, human_input_episodes)
+    return epsilon, human_input_episodes
+
+
+
+def humancontrole():
+    if keyboard.is_pressed('space'):
+        return 1
+    else:
+        return 0
+
 
 
 if __name__ == '__main__':

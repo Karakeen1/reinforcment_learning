@@ -76,16 +76,16 @@ class Agent():
         self.GRAPH_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.png')
 
     def run(self, is_training=True, render=False, pretrained_model_path=None):
+        start_time = datetime.now()
+        last_graph_update_time = start_time
         if is_training:
-            start_time = datetime.now()
-            last_graph_update_time = start_time
             log_message = f"{start_time.strftime(DATE_FORMAT)}: Training starting..."
             print(log_message)
             with open(self.LOG_FILE, 'w') as file:
                 file.write(log_message + '\n')
 
         env = gym.make(self.env_id, render_mode='human', **self.env_make_params)
-        env.metadata['render_fps'] = 1000
+        env.metadata['render_fps'] = 30
         num_actions = env.action_space.n
         # num_states = env.observation_space.shape[0] # 12
         # num_states = (84,84)
@@ -174,7 +174,7 @@ class Agent():
             screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
             
             #cv2.imshow('Screenshot', screenshot)
-            frame_array = preprocess_frame(screenshot) # shape tupple (84, 84)          
+            frame_array = preprocess_frame(screenshot, env_step_count) # shape tupple (84, 84)          
             
             state = torch.tensor(frame_array, dtype=torch.float, device=device)
             state = preprocess_state(state)  # Now state has shape [1, 1, x, y]
@@ -271,16 +271,14 @@ class Agent():
                 screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
                 
                 
-                frame_array = preprocess_frame(screenshot) # shape tupple (x, y)
+                frame_array = preprocess_frame(screenshot, env_step_count) # shape tupple (x, y)
                 
                 new_state = torch.tensor(frame_array, dtype=torch.float, device=device)
                 new_state = preprocess_state(new_state)  # Now state has shape [1, 1, x, y]
                 new_state = frame_stack.add_frame(new_state)
                 
                 # Analyse frame array for reward:
-                # at pixel x= 22 the bird is all black for 84x84
-                # bird 42x42 at pixel 11, 3 after cropping left
-                white_pixel_count = np.sum(frame_array[:, 3])
+                white_pixel_count = np.sum(frame_array[:, 3]) # vertical line 3 pixels in from the left
                 #print(white_pixel_count)
                 #time.sleep(0.1)
                 # < 8 pixel bird without pipe (<= 4 for 42x42 bw inverted)
@@ -309,6 +307,10 @@ class Agent():
                 state = new_state
                 epsilon = listen_on_e(self, epsilon)
                 
+                current_time = datetime.now()
+                if current_time - last_graph_update_time > timedelta(seconds=10):
+                    env.metadata['render_fps'] = 1000
+                
             rewards_per_episode.append(episode_reward)
             
             
@@ -317,6 +319,7 @@ class Agent():
             if current_time - last_graph_update_time > timedelta(seconds=10):
                 self.save_graph_play(rewards_per_episode)
                 last_graph_update_time = current_time
+                
 
             if is_training:
                 if episode_reward > best_reward:
@@ -326,7 +329,11 @@ class Agent():
                         file.write(log_message + '\n')
                     torch.save(policy_cnn.state_dict(), self.MODEL_FILE)
                     best_reward = episode_reward
-                    
+                
+                current_time = datetime.now()
+                if current_time - last_graph_update_time > timedelta(seconds=10):
+                    self.save_graph(rewards_per_episode, epsilon_history)
+                    last_graph_update_time = current_time    
 
                 if len(memory) > self.mini_batch_size:
                     mini_batch = memory.sample(self.mini_batch_size)
@@ -496,14 +503,14 @@ class WindowCapture:
         return np.array(screenshot)
    
     
-def preprocess_frame(frame):
+def preprocess_frame(frame, env_step_count):
     # Convert to grayscale
     # gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
     # Resize
     # resized = cv2.resize(black_white, (84, 84), interpolation=cv2.INTER_AREA)
     
     # Separate color channels
-    blue = frame[:, :, 0] # most prommising chanel since pipes and bird very dark
+    blue = frame[:, :, 0] # most prommising channel since pipes and bird very dark
     #green = frame[:, :, 1]
     #red = frame[:, :, 2]
     
@@ -517,15 +524,20 @@ def preprocess_frame(frame):
     cropped = blue[90:height-150, 60:]
     #cv2.imwrite("flappybird84_cropped.png", cropped)
     # Resize
-    resized = cv2.resize(cropped, (84,84), interpolation=cv2.INTER_AREA) # try 42x42 pixels
+    resized = cv2.resize(cropped, (84,84), interpolation=cv2.INTER_AREA) 
     #cv2.imwrite("flappybird84_resized.png", resized)
     
     
     # Apply threshold
     threshold = 170 
-    #black_white = np.where(resized > threshold, 0, 255)
+    black_white = np.where(resized > threshold, 0, 255)
     normalized = np.where(resized > threshold, 0, 1) #  allready normalized with 0 and 1 
-    #cv2.imwrite("flappybird_blacknwhite84.png", black_white)
+    
+    #if env_step_count > 40 and env_step_count < 60:
+        #print(env_step_count)
+        #timestamp = time.time()
+        #cv2.imwrite(f"C:\\Users\\mmose\\OneDrive\\Programmieren\\reinforcment_learning\\flappybird\\bw_images\\flappybird_blacknwhite84_{timestamp}.png", black_white)
+        
     
     # Normalize
     #normalized = black_white / 255.0
