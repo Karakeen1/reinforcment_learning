@@ -52,6 +52,8 @@ Um das Bild als Input zu nutzen, wurde es wie folge vorverarbeitet:
 - Das erste bildbasierte Modell mit Einzelbild-Input zeigte begrenzte Lernkapazität.
 - Das finale Modell mit 4 gestapelten Frames und einer tieferen konvolutionellen Architektur zeigte signifikante Verbesserungen in der Spielleistung.
 
+## Highscore
+Das Spiel ist unendlich, die höchste erreichte Punktzahl war wie folgt.
 ![Höchste erreichte Punktzahl](images_for_documentation/flappybird_e_15227_26407_pipes.png)
 
 
