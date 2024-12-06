@@ -7,6 +7,8 @@ Modul Reinforcement Learning
 Dieses Projekt untersucht die Anwendung von Deep Q-Networks (DQN) zum Spielen von Flappy Bird. Ziel war es, einen Agenten zu trainieren, der das Spiel effektiv anhand von visuellem Input spielt, wobei die Entwicklung von einem einfachen zustandsbasierten Ansatz zu einem komplexeren bildbasierten Modell fortschritt.
 Als Flappy Bird Environment wurde folgendes verwendet: https://github.com/markub3327/flappy-bird-gymnasium
 
+Um Modell anzuwenden: >> python .\agent_pygame_screen84x84.py flappybird1
+
 ## Projektstadien
 1. Baseline DQN-Modell
 Zunächst wurde ein einfaches DQN-Modell als Minimum Viable Product (MVP) implementiert:
