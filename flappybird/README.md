@@ -30,31 +30,26 @@ Zur Verbesserung der Leistung wurde das Modell erweitert:
 Technische Details
 # Bildvorverarbeitung
 Um das Bild als Input zu nutzen, wurde es wie folge vorverarbeitet:
+
 ![Bild Vorverarbeitungsschritte](images_for_documentation/image_preprocessing.png)
 
 ## Finale Modellarchitektur
 
-self.conv1 = nn.Conv2d(in_channels=4, out_channels=32, kernel_size=8, stride=4)
-self.relu1 = nn.ReLU(inplace=True)
-self.conv2 = nn.Conv2d(32, 64, 4, 2)
-self.relu2 = nn.ReLU(inplace=True)
-self.conv3 = nn.Conv2d(64, 64, 3, 1)
-self.relu3 = nn.ReLU(inplace=True)
-self.fc4 = nn.Linear(3136, 1024)
-self.relu4 = nn.ReLU(inplace=True)
-self.fc5 = nn.Linear(1024, self.number_of_actions)  # actions = 2
-
-## Trainingsprozess
-
-    Replay Memory: 100.000 Erfahrungstupel
-    Minibatch-Größe: 32 Tupel
-    Epsilon-Greedy Explorationsstrategie
+    self.conv1 = nn.Conv2d(in_channels=4, out_channels=32, kernel_size=8, stride=4)
+    self.relu1 = nn.ReLU(inplace=True)
+    self.conv2 = nn.Conv2d(32, 64, 4, 2)
+    self.relu2 = nn.ReLU(inplace=True)
+    self.conv3 = nn.Conv2d(64, 64, 3, 1)
+    self.relu3 = nn.ReLU(inplace=True)
+    self.fc4 = nn.Linear(3136, 1024)
+    self.relu4 = nn.ReLU(inplace=True)
+    self.fc5 = nn.Linear(1024, self.number_of_actions)  # actions = 2
 
 ## Ergebnisse und Beobachtungen
 
-    Das anfängliche zustandsbasierte DQN lieferte eine funktionale Baseline.
-    Das erste bildbasierte Modell mit Einzelbild-Input zeigte begrenzte Lernkapazität.
-    Das finale Modell mit 4 gestapelten Frames und einer tieferen konvolutionellen Architektur zeigte signifikante Verbesserungen in der Spielleistung.
+- Das anfängliche zustandsbasierte DQN lieferte eine funktionale Baseline.
+- Das erste bildbasierte Modell mit Einzelbild-Input zeigte begrenzte Lernkapazität.
+- Das finale Modell mit 4 gestapelten Frames und einer tieferen konvolutionellen Architektur zeigte signifikante Verbesserungen in der Spielleistung.
 
 
 ## Fazit
