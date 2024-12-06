@@ -52,6 +52,8 @@ Um das Bild als Input zu nutzen, wurde es wie folge vorverarbeitet:
 - Das erste bildbasierte Modell mit Einzelbild-Input zeigte begrenzte Lernkapazität.
 - Das finale Modell mit 4 gestapelten Frames und einer tieferen konvolutionellen Architektur zeigte signifikante Verbesserungen in der Spielleistung.
 
+![Höchste erreichte Punktzahl](images_for_documentation/flappybird_e_15227_26407_pipes.png)
+
 
 ## Fazit
 Dieses Projekt zeigt die Entwicklung von einem einfachen zustandsbasierten Reinforcement-Learning-Modell zu einem  bildbasierten Ansatz für das Spielen von Flappy Bird. Zielführend für gute Resultate war erst der Input von vier Bildern. So konnte die Spieldynamik (Geschwindigkeit und Beschleunigung) besser erfasst werden und hohe Scores erreicht werden.
