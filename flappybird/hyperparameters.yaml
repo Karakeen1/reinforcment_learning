@@ -17,8 +17,8 @@ flappybird1:
   env_id: FlappyBird-v0
   replay_memory_size: 100000 # frames saved in memory: 1 episode without action (just fall) is about 30 frames, to first pipe about 40 frames
   mini_batch_size: 32
-  epsilon_init: 0.0
-  epsilon_decay: 0.9975 # 
+  epsilon_init: 0.035
+  epsilon_decay: 0.998 # 
   epsilon_offset: 0 #10000 # episodes with stable espilon_init
   epsilon_min: 0.0
   network_sync_rate: 10

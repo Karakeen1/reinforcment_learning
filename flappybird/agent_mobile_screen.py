@@ -288,7 +288,7 @@ class Agent():
                 #print(reward)
                 episode_reward += reward
                 reward = torch.tensor(reward, dtype=torch.float, device=device)
-                print(f"bird {bird_position}, gap {gap_center}, reward {reward}")
+                #print(f"bird {bird_position}, gap {gap_center}, reward {reward}")
 
                 if is_training:
                     # memory.append((state, action, new_state, reward, terminated))
@@ -523,7 +523,7 @@ def preprocess_frame(frame, env_step_count):
     threshold_bottom = 100
     output[75:] = np.where(resized[75:] > threshold_bottom, 0, 1)
     
-    #print_output = output * 255
+    print_output = output * 255
     #cv2.imwrite("mobile_filtered_bandw.png", print_output)
     
   
@@ -542,7 +542,7 @@ def analyze_vertical_lines(binary_image, prev_gap_center):
     bird_position = transitions[0] if len(transitions) > 0 else -1
     
     # For x=84 (pipe gap) - only if enough white pixels present
-    column_83 = binary_image[:, 82]  # 0-based indexing
+    column_83 = binary_image[:, 83-13]  # when next pipe at the 70 pixel the bird enters the actual pipe
     white_count_83 = np.sum(column_83)
     #print(white_count_83)
     if white_count_83 > 50:
