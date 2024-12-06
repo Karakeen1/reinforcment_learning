@@ -15,8 +15,6 @@ Zunächst wurde ein einfaches DQN-Modell als Minimum Viable Product (MVP) implem
 - Architektur: Ein hidden layer mit 1024 Neuronen
 - Output: 2 Aktionen (flappen oder nicht flappen)
 
-Dieser Ansatz diente als Baseline für den Vergleich mit fortgeschritteneren Methoden.
-
 2. Bildbasiertes DQN-Modell
 Das Projekt entwickelte sich weiter zur Verwendung von Rohbildern des Spiels als Input:
 
